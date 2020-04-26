@@ -98,4 +98,5 @@ mvn \
 -Djitsi-meet.instance.url=$INSTANCE_URL \
 -Djitsi-meet.isRemote=true \
 -Dchrome.disable.nosanbox=true \
+-Dchrome.enable.headless=true \
 test
