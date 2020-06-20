@@ -46,6 +46,7 @@ public class WebParticipant extends Participant<WebDriver>
             + "&config.testing.testMode=true"
             + "&config.disableAEC=true"
             + "&config.disableNS=true"
+            + "&config.enableTalkWhileMuted=false"
             + "&config.callStatsID=false"
             + "&config.alwaysVisibleToolbar=true"
             + "&config.p2p.enabled=false"
@@ -53,7 +54,8 @@ public class WebParticipant extends Participant<WebDriver>
             + "&config.gatherStats=true"
             + "&config.disable1On1Mode=true"
             + "&config.analytics.disabled=true"
-            + "&interfaceConfig.SHOW_CHROME_EXTENSION_BANNER=false";
+            + "&interfaceConfig.SHOW_CHROME_EXTENSION_BANNER=false"
+            + "&interfaceConfig.DISABLE_FOCUS_INDICATOR=true";
 
     /**
      * The javascript code which returns {@code true} if we are joined in
@@ -77,8 +79,9 @@ public class WebParticipant extends Participant<WebDriver>
 
     private ChatPanel chatPanel;
     private DialInNumbersPage dialInNumbersPage;
-    private InfoDialog infoDialog;
+    private InviteDialog inviteDialog;
     private LargeVideo largeVideo;
+    private SecurityDialog securityDialog;
     private SettingsDialog settingsDialog;
     private Toolbar toolbar;
     private WebFilmstrip filmstrip;
@@ -501,16 +504,16 @@ public class WebParticipant extends Participant<WebDriver>
     }
 
     /**
-     * @return a representation of the info dialog of this participant.
+     * @return a representation of the invite dialog of this participant.
      */
-    public InfoDialog getInfoDialog()
+    public InviteDialog getInviteDialog()
     {
-        if (infoDialog == null)
+        if (inviteDialog == null)
         {
-            infoDialog = new InfoDialog(this);
+            inviteDialog = new InviteDialog(this);
         }
 
-        return infoDialog;
+        return inviteDialog;
     }
 
     /**
@@ -524,6 +527,19 @@ public class WebParticipant extends Participant<WebDriver>
         }
 
         return largeVideo;
+    }
+
+    /**
+     * @return a representation of the security dialog of this participant.
+     */
+    public SecurityDialog getSecurityDialog()
+    {
+        if (securityDialog == null)
+        {
+            securityDialog = new SecurityDialog(this);
+        }
+
+        return securityDialog;
     }
 
     /**
