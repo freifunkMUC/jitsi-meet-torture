@@ -15,7 +15,6 @@
  */
 package org.jitsi.meet.test;
 
-import org.jitsi.meet.test.base.*;
 import org.jitsi.meet.test.capture.*;
 import org.jitsi.meet.test.tasks.*;
 import org.jitsi.meet.test.util.*;
@@ -121,7 +120,7 @@ public class PSNRTest
                         ? "" : " INPUT_VIDEO_FILE does not exist"));
         }
 
-        ParticipantOptions options
+        WebParticipantOptions options
             = new WebParticipantOptions()
                 .setFakeStreamVideoFile(INPUT_VIDEO_FILE);
 

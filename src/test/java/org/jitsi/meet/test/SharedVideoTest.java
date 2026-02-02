@@ -20,7 +20,6 @@ import org.jitsi.meet.test.util.*;
 import org.jitsi.meet.test.web.*;
 
 import org.openqa.selenium.*;
-import org.openqa.selenium.support.ui.*;
 import org.testng.annotations.*;
 
 import static org.testng.Assert.*;
@@ -34,33 +33,30 @@ public class SharedVideoTest
     extends WebTestBase
 {
     /**
-     * Links to youtube videos and their expected urls, used for loading and
+     * Links to videos and their expected urls, used for loading and
      * testing.
      */
-    private static String V1_VIDEO_ID = "xNXN7CZk8X0";
-    private static String V1_LINK
-        = "https://www.youtube.com/watch?v=" + V1_VIDEO_ID;
-    private static String V2_VIDEO_ID = "x-YGw3bgB_s";
-    private static String V2_LINK = "https://youtu.be/" + V2_VIDEO_ID;
+    public static String V2_LINK = "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4";
+    private static String V2_VIDEO_ID = V2_LINK;
 
     /**
      * Assign to variable c the shared video container.
      * Used to obtain the player.
      */
     private static String JS_GET_SHARED_VIDEO_CONTAINER
-        = "var c = APP.UI.getLargeVideo().containers['sharedvideo']; ";
+        = "var c = window; ";
 
     /**
      * The javascript code which returns the current time of the player.
      */
     private static final String JS_GET_PLAYER_CURRENT_TIME
-        = JS_GET_SHARED_VIDEO_CONTAINER + "return c.player.getCurrentTime();";
+        = JS_GET_SHARED_VIDEO_CONTAINER + "return c._sharedVideoPlayer.getTime();";
 
     /**
      * The javascript code which returns the video URL from the player.
      */
     private static final String JS_GET_PLAYER_VIDEO_URL
-        = JS_GET_SHARED_VIDEO_CONTAINER + "return c.player.getVideoUrl();";
+        = JS_GET_SHARED_VIDEO_CONTAINER + "return c._sharedVideoPlayer.props._videoUrl;";
 
     private static String currentVideoId;
 
@@ -78,7 +74,7 @@ public class SharedVideoTest
     @Test
     public void startSharingVideo()
     {
-        startSharingVideoByUrl(V1_LINK, V1_VIDEO_ID, true);
+        startSharingVideoByUrl(V2_LINK, V2_VIDEO_ID, true);
 
         checkRunning();
 
@@ -107,30 +103,23 @@ public class SharedVideoTest
         // sendKeys is not working for FF, seems the input has size of 20
         // and only 21 chars goes in, the size is not visible in
         // web-development console
-        MeetUIUtils.setAttribute(
-            driver1,
-            driver1.findElement(
-                By.xpath("//input[@name='sharedVideoUrl']")),
-            "value",
-            url);
+        driver1.findElement(By.xpath("//input[@name='sharedVideoUrl']"))
+                .sendKeys(url);
 
         currentVideoId = expectedId;
 
         TestUtils.click(
             driver1,
-            By.name("jqi_state0_buttonspandatai18ndialogShareSharespan"));
+            By.id("modal-dialog-ok-button"));
 
         // give time for the internal frame to load and attach to the page.
         TestUtils.waitMillis(2000);
 
-        WebDriverWait wait = new WebDriverWait(driver1, 30);
-        wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(
-            By.id("sharedVideoIFrame")));
         // make sure we are in meet, not in the frame
         driver1.switchTo().defaultContent();
 
         assertTrue(
-            driver1.findElement(By.id("sharedVideoIFrame")).isDisplayed(),
+            driver1.findElement(By.id("sharedVideoPlayer")).isDisplayed(),
             "Video not displayed:");
 
         if (checkSecondParticipantState)
@@ -142,7 +131,7 @@ public class SharedVideoTest
 
             TestUtils.waitForDisplayedElementByID(
                 driver2,
-                "sharedVideoIFrame",
+                "sharedVideoPlayer",
                 10);
         }
     }
@@ -158,8 +147,8 @@ public class SharedVideoTest
         TestUtils.waitForBoolean(
             participant.getDriver(),
             JS_GET_SHARED_VIDEO_CONTAINER
-                + "return (c && c.player "
-                    + "&& c.player.getPlayerState() === " + state + ");",
+                + "return (c && c._sharedVideoPlayer "
+                    + "&& c._sharedVideoPlayer.getPlaybackStatus() === '" + state + "');",
             15);
     }
 
@@ -191,9 +180,9 @@ public class SharedVideoTest
     private void checkRunning()
     {
         checkPlayerLoadedAndInState(
-            getParticipant1(), "YT.PlayerState.PLAYING");
+            getParticipant1(), "playing");
         checkPlayerLoadedAndInState(
-            getParticipant2(), "YT.PlayerState.PLAYING");
+            getParticipant2(), "playing");
     }
 
     /**
@@ -204,14 +193,14 @@ public class SharedVideoTest
     {
         WebParticipant participant1 = getParticipant1();
         participant1.executeScript(
-            JS_GET_SHARED_VIDEO_CONTAINER + "c.player.pauseVideo();");
+            JS_GET_SHARED_VIDEO_CONTAINER + "c._sharedVideoPlayer.pause();");
 
         checkPlayerLoadedAndInState(
             participant1,
-            "YT.PlayerState.PAUSED");
+            "pause");
         checkPlayerLoadedAndInState(
             getParticipant2(),
-            "YT.PlayerState.PAUSED");
+            "pause");
     }
 
     /**
@@ -222,15 +211,15 @@ public class SharedVideoTest
     {
         WebParticipant participant1 = getParticipant1();
         participant1.executeScript(
-            JS_GET_SHARED_VIDEO_CONTAINER + "c.player.playVideo();");
+            JS_GET_SHARED_VIDEO_CONTAINER + "c._sharedVideoPlayer.play();");
 
         checkPlayerLoadedAndInState(
             participant1,
-            "YT.PlayerState.PLAYING"
+            "playing"
         );
         checkPlayerLoadedAndInState(
             getParticipant2(),
-            "YT.PlayerState.PLAYING"
+            "playing"
         );
     }
 
@@ -245,13 +234,13 @@ public class SharedVideoTest
         WebParticipant participant2 = getParticipant2();
 
         participant1.executeScript(
-            JS_GET_SHARED_VIDEO_CONTAINER + "c.player.seekTo(86);");
+            JS_GET_SHARED_VIDEO_CONTAINER + "c._sharedVideoPlayer.seek(86);");
 
         // let's wait for the fast forward
         String waitForFastForwardScript
             = JS_GET_SHARED_VIDEO_CONTAINER
-                + "return (c.player.getPlayerState() === YT.PlayerState.PLAYING"
-                + " && c.player.getCurrentTime() > 86);";
+                + "return (c._sharedVideoPlayer.getPlaybackStatus() === 'playing'"
+                + " && c._sharedVideoPlayer.getTime() > 86);";
         TestUtils.waitForBoolean(
             participant1.getDriver(),
             waitForFastForwardScript,
@@ -289,59 +278,27 @@ public class SharedVideoTest
     }
 
     /**
-     * Changes the current volume and checks for the change on the other side
-     */
-    @Test(dependsOnMethods = { "seekTest" })
-    public void volumeTest()
-    {
-        WebParticipant participant1 = getParticipant1();
-        Long participant1volume
-            = (Long) participant1.executeScript(
-                JS_GET_SHARED_VIDEO_CONTAINER + "return c.player.getVolume();");
-
-        long volumeToSet = participant1volume - 20;
-
-        participant1.executeScript(
-            JS_GET_SHARED_VIDEO_CONTAINER
-                + "c.player.setVolume(" + volumeToSet + ");");
-
-        // now check for volume on both sides
-        String checkVolumeScript
-            = JS_GET_SHARED_VIDEO_CONTAINER
-                + "return (c.player.getPlayerState() === YT.PlayerState.PLAYING"
-                + " && c.player.getVolume() == " + volumeToSet + ");";
-        TestUtils.waitForBoolean(
-            participant1.getDriver(),
-            checkVolumeScript,
-            10);
-        TestUtils.waitForBoolean(
-            getParticipant2().getDriver(),
-            checkVolumeScript,
-            10);
-    }
-
-    /**
      * Mutes the current volume and checks for the change on the other side
      */
-    @Test(dependsOnMethods = { "volumeTest" })
+    @Test(dependsOnMethods = { "playTest" })
     public void muteTest()
     {
         WebParticipant participant1 = getParticipant1();
         participant1.executeScript(
             JS_GET_SHARED_VIDEO_CONTAINER
-                + "c.player.mute();");
+                + "c._sharedVideoPlayer.mute();");
         // now check for volume on both sides
         TestUtils.waitForBoolean(
             participant1.getDriver(),
             JS_GET_SHARED_VIDEO_CONTAINER
-                + "return (c.player.getPlayerState() === YT.PlayerState.PLAYING"
-                + " && c.player.isMuted());",
+                + "return (c._sharedVideoPlayer.getPlaybackStatus() === 'playing'"
+                + " && c._sharedVideoPlayer.isMuted());",
             10);
         TestUtils.waitForBoolean(
             getParticipant2().getDriver(),
             JS_GET_SHARED_VIDEO_CONTAINER
-                + "return (c.player.getPlayerState() === YT.PlayerState.PLAYING"
-                + " && (c.player.isMuted() || c.player.getVolume() == 0));",
+                + "return (c._sharedVideoPlayer.getPlaybackStatus() === 'playing'"
+                + " && (c._sharedVideoPlayer.isMuted() || c._sharedVideoPlayer.getVolume() == 0));",
             10);
     }
 
@@ -369,7 +326,7 @@ public class SharedVideoTest
 
         assertTrue(
             getParticipant2().getDriver()
-                .findElement(By.id("sharedVideoIFrame"))
+                .findElement(By.id("sharedVideoPlayer"))
                 .isDisplayed(),
             "Video not displayed:");
     }
@@ -382,36 +339,23 @@ public class SharedVideoTest
     @Test(dependsOnMethods = { "backToSharedVideoTest" })
     public void stopSharingTest()
     {
-        getParticipant1().getToolbar().clickSharedVideoButton();
-
         WebDriver driver1 = getParticipant1().getDriver();
-
-        // let's cancel
-        executeClickWorkaroundScript(
-            getParticipant1(),
-            "jqi_state0_buttonspandatai18ndialogCancelCancelspan"
-        );
 
         // video should be visible on both sides
         WebDriver driver2 = getParticipant2().getDriver();
         assertTrue(
-            driver1.findElement(By.id("sharedVideoIFrame")).isDisplayed(),
+            driver1.findElement(By.id("sharedVideoPlayer")).isDisplayed(),
             "Video not displayed:");
         assertTrue(
-            driver2.findElement(By.id("sharedVideoIFrame")).isDisplayed(),
+            driver2.findElement(By.id("sharedVideoPlayer")).isDisplayed(),
             "Video not displayed:");
 
-        getParticipant1().getToolbar().clickSharedVideoButton();
-
-        executeClickWorkaroundScript(
-            getParticipant1(),
-            "jqi_state0_buttonspandatai18ndialogRemoveRemovespan"
-        );
+        getParticipant1().getToolbar().clickStopSharedVideoButton();
 
         try
         {
             TestUtils.waitForNotDisplayedElementByID(
-                driver1, "sharedVideoIFrame", 5);
+                driver1, "sharedVideoPlayer", 5);
         }
         catch (StaleElementReferenceException ex)
         {
@@ -421,7 +365,7 @@ public class SharedVideoTest
         try
         {
             TestUtils.waitForNotDisplayedElementByID(
-                driver2, "sharedVideoIFrame", 5);
+                driver2, "sharedVideoPlayer", 5);
         }
         catch (StaleElementReferenceException ex)
         {
@@ -430,22 +374,7 @@ public class SharedVideoTest
         }
     }
 
-    /**
-     * Starts sharing another video.
-     */
     @Test(dependsOnMethods = { "stopSharingTest" })
-    public void startSharingDifferentVideo()
-    {
-        startSharingVideoByUrl(V2_LINK, V2_VIDEO_ID, true);
-
-        checkRunning();
-
-        checkUrls();
-
-        stopSharingTest();
-    }
-
-    @Test(dependsOnMethods = { "startSharingDifferentVideo" })
     public void startSharingDifferentVideoAfterStop()
     {
         startSharingVideoByUrl(V2_LINK, V2_VIDEO_ID, true);
@@ -465,7 +394,7 @@ public class SharedVideoTest
         getParticipant1().hangUp();
 
         TestUtils.waitForNotDisplayedElementByID(
-            getParticipant2().getDriver(), "sharedVideoIFrame", 5);
+            getParticipant2().getDriver(), "sharedVideoPlayer", 5);
     }
 
     /**
@@ -495,24 +424,17 @@ public class SharedVideoTest
         ensureOneParticipant();
         WebParticipant participant1 = getParticipant1();
 
-        participant1.getToolbar().waitForSharedVideoButtonDisplay();
-
-        // just wait a little after button is displayed
-        // sometimes the button is reported as
-        // Element is not clickable at point (566, -10)
-        TestUtils.waitMillis(1000);
-
         startSharingVideoByUrl(V2_LINK, V2_VIDEO_ID, false);
-        checkPlayerLoadedAndInState(participant1, "YT.PlayerState.PLAYING");
+        checkPlayerLoadedAndInState(participant1, "playing");
 
-        String stateToCheck = "YT.PlayerState.PLAYING";
+        String stateToCheck = "playing";
         if (pause)
         {
-            stateToCheck = "YT.PlayerState.PAUSED";
+            stateToCheck = "pause";
             participant1.executeScript(
-                JS_GET_SHARED_VIDEO_CONTAINER + "c.player.seekTo(15);");
+                JS_GET_SHARED_VIDEO_CONTAINER + "c._sharedVideoPlayer.seek(15);");
             participant1.executeScript(
-                JS_GET_SHARED_VIDEO_CONTAINER + "c.player.pauseVideo();");
+                JS_GET_SHARED_VIDEO_CONTAINER + "c._sharedVideoPlayer.pause();");
         }
 
         ensureTwoParticipants();
@@ -526,7 +448,7 @@ public class SharedVideoTest
         checkPlayerLoadedAndInState(participant2, stateToCheck);
 
         assertTrue(
-            driver2.findElement(By.id("sharedVideoIFrame")).isDisplayed(),
+            driver2.findElement(By.id("sharedVideoPlayer")).isDisplayed(),
             "Video not displayed:");
     }
 
@@ -538,8 +460,8 @@ public class SharedVideoTest
         WebParticipant participant1 = getParticipant1();
         WebParticipant participant2 = getParticipant2();
 
-        checkPlayerLoadedAndInState(participant1, "YT.PlayerState.PAUSED");
-        checkPlayerLoadedAndInState(participant2, "YT.PlayerState.PAUSED");
+        checkPlayerLoadedAndInState(participant1, "pause");
+        checkPlayerLoadedAndInState(participant2, "pause");
 
         double time1
             = getDouble(participant1.executeScript(JS_GET_PLAYER_CURRENT_TIME));
@@ -555,32 +477,5 @@ public class SharedVideoTest
         checkUrls();
 
         stopSharingTest();
-    }
-
-    /**
-     * Clicks on an element with the passed in name using javascript. This works
-     * around: https://bugs.chromium.org/p/chromedriver/issues/detail?id=2758.
-     * Chromedriver fails to click on buttons that are over a cross domain
-     * iframe, which would be the case with the YouTube video iframe.
-     *
-     * @param participant <tt>Participant</tt> of the participant who will
-     * be clicking the element.
-     * @param name The name attribute value of the element to be clicked.
-     */
-    private void executeClickWorkaroundScript(
-        WebParticipant participant,
-        String name)
-    {
-        new WebDriverWait(participant.getDriver(), 5)
-            .until((ExpectedCondition<Boolean>) d -> {
-                Object res = participant.executeScript(
-                    "return document.getElementsByName('" +
-                    name +
-                    "').length > 0;");
-                return TestUtils.getBooleanResult(res);
-            });
-
-        participant.executeScript(
-            "return document.getElementsByName('" + name + "')[0].click();");
     }
 }

@@ -44,7 +44,9 @@ public class DisplayNameTest
     {
         super.setupClass();
 
-        ensureTwoParticipants();
+        WebParticipantOptions ops = new WebParticipantOptions().setSkipDisplayNameSet(true);
+
+        ensureTwoParticipants(null, null, ops, ops);
     }
 
     /**
@@ -101,7 +103,7 @@ public class DisplayNameTest
 
         // now let's reload the second participant
         getParticipant2().hangUp();
-        ensureTwoParticipants();
+        ensureTwoParticipants(null, null, null, new WebParticipantOptions().setSkipDisplayNameSet(true));
 
         doLocalDisplayNameCheck(randomName);
     }
@@ -132,7 +134,7 @@ public class DisplayNameTest
         WebParticipant participant2 = getParticipant2();
         String defaultDisplayName =
             (String) participant1.executeScript(
-                    "return interfaceConfig.DEFAULT_REMOTE_DISPLAY_NAME;");
+                    "return config.defaultRemoteDisplayName;");
 
         // check on first browser
         checkRemoteVideoForName(
@@ -159,26 +161,8 @@ public class DisplayNameTest
     {
         String remoteParticipantEndpointId = remoteParticipant.getEndpointId();
 
-        // check on local participant remote video
-        WebElement displayNameElem =
-            localParticipant.getDriver().findElement(By.xpath(
-                "//span[@id='participant_" + remoteParticipantEndpointId +
-                    "']//span[@id='participant_" +
-                    remoteParticipantEndpointId + "_name']"));
-
-        boolean isFF = remoteParticipant.getType().isFirefox();
-        if (!isFF)
-        {
-            assertTrue(
-                displayNameElem.isDisplayed(),
-                "Display name not visible");
-        }
-
-        String displayNameText = displayNameElem.getText();
-        if (isFF)
-        {
-            displayNameText = displayNameElem.getAttribute("innerHTML");
-        }
+        String displayNameText
+            = MeetUIUtils.getRemoteDisplayName(localParticipant.getDriver(), remoteParticipantEndpointId);
 
         assertTrue(
             displayNameText.contains(nameToCheck),
@@ -204,21 +188,33 @@ public class DisplayNameTest
         action0.moveToElement(remoteVideoElem);
         action0.perform();
 
+        checkDisplayNameOnLocalVideo(getParticipant2(), newName);
+    }
+
+    /**
+     * Checks the shown display name on local video.
+     * @param participant the participant to check.
+     * @param newName the name to check.
+     */
+    public static void checkDisplayNameOnLocalVideo(WebParticipant participant, String newName)
+    {
+        WebDriver driver = participant.getDriver();
+
         // now lets check whether display name is set locally
         WebElement displayNameElem
-            = driver2.findElement(By.xpath(
-                "//span[@id='localVideoContainer']"
-                    + "//span[@id='localDisplayName']"));
+            = driver.findElement(By.xpath(
+            "//span[@id='localVideoContainer']"
+                + "//span[@id='localDisplayName']"));
 
         // hover over local display name
         WebElement localVideoContainerElem
-            = driver2.findElement(By.xpath(
-                "//span[@id='localVideoContainer']"));
-        Actions action = new Actions(driver2);
+            = driver.findElement(By.xpath(
+            "//span[@id='localVideoContainer']"));
+        Actions action = new Actions(driver);
         action.moveToElement(localVideoContainerElem);
         action.build().perform();
 
-        boolean isFF = getParticipant2().getType().isFirefox();
+        boolean isFF = participant.getType().isFirefox();
         if (!isFF)
         {
             assertTrue(

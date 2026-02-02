@@ -15,6 +15,7 @@
  */
 package org.jitsi.meet.test;
 
+import org.jitsi.meet.test.pageobjects.web.*;
 import org.jitsi.meet.test.util.*;
 import org.jitsi.meet.test.web.*;
 
@@ -33,14 +34,14 @@ public class AudioOnlyTest
         = "//div[@id='videoResolutionLabel'][contains(@class, 'audio-only')]";
     private static String LARGE_AVATAR_XPATH ="//div[@id='dominantSpeaker']";
     private static String VIDEO_QUALITY_SLIDER_CLASS
-        = "video-quality-dialog-slider";
+        = "custom-slider";
 
     @Override
     public void setupClass()
     {
         super.setupClass();
 
-        ensureTwoParticipants();
+        ensureTwoParticipants(null, null, new WebParticipantOptions().setSkipDisplayNameSet(true), null);
     }
 
     /**
@@ -57,23 +58,9 @@ public class AudioOnlyTest
     }
 
     /**
-     * Verifies that participant1 cannot video unmute while in audio only mode.
-     */
-    @Test(dependsOnMethods = { "enableAudioOnlyAndCheck" })
-    public void videoUnmuteDisabledInAudioOnly()
-    {
-        getParticipant1().getToolbar().clickAudioMuteButton();
-
-        verifyVideoMute(
-            getParticipant1(),
-            getParticipant2(),
-            true);
-    }
-
-    /**
      * Verifies that participant1 sees avatars for itself and other participants.
      */
-    @Test(dependsOnMethods = { "videoUnmuteDisabledInAudioOnly" })
+    @Test(dependsOnMethods = { "enableAudioOnlyAndCheck" })
     public void avatarsDisplayForParticipants()
     {
         WebDriver driver1 = getParticipant1().getDriver();
@@ -81,12 +68,12 @@ public class AudioOnlyTest
         TestUtils.waitForDisplayedElementByXPath(
             driver1, LARGE_AVATAR_XPATH, 2);
 
-        MeetUIUtils.assertLocalThumbnailShowsAvatar(driver1);
+        MeetUIUtils.assertLocalThumbnailShowsDefaultAvatar(driver1);
     }
 
     /**
-     * Disables audio only mode and verifies that both participant1 and
-     * participant2 participant see participant1 as not video muted.
+     * Disables audio only mode and verifies that both participant1 and participant2 see participant1 as not video
+     * muted.
      */
     @Test(dependsOnMethods = { "avatarsDisplayForParticipants" })
     public void disableAudioOnlyAndCheck()
@@ -95,6 +82,40 @@ public class AudioOnlyTest
             getParticipant1(),
             getParticipant2(),
             false);
+    }
+
+    /**
+     * Mutes video on participant1, toggles audio-only twice and then verifies if both participants see participant1
+     * as video muted.
+     */
+    @Test(dependsOnMethods = { "disableAudioOnlyAndCheck"})
+    public void testAudioOnlyAfterMuted()
+    {
+        // Mute video on participant1.
+        getParticipant1().getToolbar().clickVideoMuteButton();
+
+        verifyVideoMute(getParticipant1(), getParticipant2(), true);
+
+        // Enable audio-only mode.
+        setAudioOnlyAndCheck(getParticipant1(), getParticipant2(), true);
+
+        // Disable audio-only mode.
+        setAudioOnly(getParticipant1(), false);
+
+        // Participant1 should stay muted since it was muted before audio-only was enabled.
+        verifyVideoMute(getParticipant1(), getParticipant2(), true);
+    }
+
+    /**
+     * Unmutes video on participant1 and verifies both participants see participant1 as not video muted.
+     */
+    @Test(dependsOnMethods = { "testAudioOnlyAfterMuted" })
+    public void unmuteAfterAudioOnlyDisabled()
+    {
+        // Unmute video on participant1.
+        getParticipant1().getToolbar().clickVideoUnmuteButton();
+
+        verifyVideoMute(getParticipant1(), getParticipant2(), false);
     }
 
     /**
@@ -133,7 +154,7 @@ public class AudioOnlyTest
      * @param participant the {@code WebParticipant}.
      * @param audioOnly whether or not audio only mode should be enabled.
      */
-    private void setAudioOnly(WebParticipant participant, boolean audioOnly)
+    public static void setAudioOnly(WebParticipant participant, boolean audioOnly)
     {
         WebDriver participantDriver = participant.getDriver();
 
@@ -173,17 +194,16 @@ public class AudioOnlyTest
      * @param participant the {@code WebParticipant}.
      * @param visible whether or not the dialog should be displayed.
      */
-    private void setVideoQualityDialogVisible(
-        WebParticipant participant, boolean visible)
+    private static void setVideoQualityDialogVisible(WebParticipant participant, boolean visible)
     {
-        boolean isDialogSliderVisible
-            = !participant.getDriver().findElements(
-                By.className(VIDEO_QUALITY_SLIDER_CLASS)).isEmpty();
-
-        if ((isDialogSliderVisible && !visible)
-            || (!isDialogSliderVisible && visible))
+        if (visible)
         {
             participant.getToolbar().clickVideoQualityButton();
+        }
+        else
+        {
+            // click close button
+            ModalDialogHelper.clickCloseButton(participant.getDriver());
         }
     }
 
@@ -201,12 +221,12 @@ public class AudioOnlyTest
     private void verifyVideoMute(
         WebParticipant testee,
         WebParticipant observer,
-        boolean muted
-    ) {
+        boolean muted)
+    {
         // Verify the observer sees the testee in the desired muted state.
-        observer.getFilmstrip().assertVideoMuteIcon(testee, muted);
+        observer.getParticipantsPane().assertIsParticipantVideoMuted(testee, muted);
 
         // Verify the testee sees itself in the desired muted state.
-        testee.getFilmstrip().assertVideoMuteIcon(testee, muted);
+        testee.getParticipantsPane().assertIsParticipantVideoMuted(testee, muted);
     }
 }

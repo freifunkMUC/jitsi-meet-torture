@@ -55,11 +55,24 @@ public abstract class RemoteParticipant<T extends WebDriver>
     }
 
     /**
+     * Promotes the participant to a moderator. This menu/operation is
+     * available only for moderators on non-moderator remote participants.
+     */
+    public abstract void grantModerator();
+
+    /**
      * Mutes the participant. This menu/operation is available only for
      * moderators and for all participants in case of all moderators module
      * enabled on the server.
      */
     public abstract void mute();
+
+    /**
+     * Stops the participant's video. This menu/operation is available only for
+     * moderators and for all participants in case of all moderators module
+     * enabled on the server.
+     */
+    public abstract void stopVideo();
 
     /**
      * Kicks the participant. This menu/operation is available only for

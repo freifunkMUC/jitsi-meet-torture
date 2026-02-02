@@ -34,20 +34,13 @@ public class AvatarTest
     public static String EMAIL = "support@jitsi.org";
     public static String HASH = "38f014e4b7dde0f64f8157d26a8c812e";
 
-    /**
-     * We store participant2's avatar src when running
-     * test changeAvatarAndCheck, and in avatarWhenVideoMuted we restart
-     * participant2 and the value should be the same.
-     * Avatars should not change after a reload.
-     */
-    private static String participant2AvatarSrc = null;
-
     @Override
     public void setupClass()
     {
         super.setupClass();
 
-        ensureTwoParticipants();
+        WebParticipantOptions ops = new WebParticipantOptions().setSkipDisplayNameSet(true);
+        ensureTwoParticipants(null, null, ops, ops);
     }
 
     /**
@@ -75,14 +68,13 @@ public class AvatarTest
                     ", should start with: " + participant1ThumbSrc);
 
         // Join participant2
-        ensureTwoParticipants();
+        ensureTwoParticipants(null, null, null, new WebParticipantOptions().setSkipDisplayNameSet(true));
         WebDriver driver2 = getParticipant2().getDriver();
         String participant2EndpointId = getParticipant2().getEndpointId();
 
         // Verify that participant1 is muted from the perspective of
         // participant2
-        getParticipant2().getFilmstrip()
-            .assertVideoMuteIcon(getParticipant1(), true);
+        getParticipant2().getParticipantsPane().assertIsParticipantVideoMuted(getParticipant1(), true);
 
         // Pin participant1's thumbnail, as participant1 is started muted for
         // participant2, there is no video element, so don't use
@@ -106,44 +98,42 @@ public class AvatarTest
         StopVideoTest stopVideoTest = new StopVideoTest(this);
         stopVideoTest.startVideoOnParticipant1AndCheck();
 
-        getParticipant2().getFilmstrip()
-            .assertVideoMuteIcon(getParticipant1(), false);
+        getParticipant2().getParticipantsPane().assertIsParticipantVideoMuted(getParticipant1(), false);
 
         MeetUIUtils.assertLocalThumbnailShowsVideo(driver1);
 
         // Now both participant1 and participant2 have video muted
         MeetUIUtils.muteVideoAndCheck(getParticipant1(), getParticipant2());
-        getParticipant2().getFilmstrip()
-            .assertVideoMuteIcon(getParticipant1(), true);
+        getParticipant2().getParticipantsPane().assertIsParticipantVideoMuted(getParticipant1(), true);
 
         MeetUIUtils.muteVideoAndCheck(getParticipant2(), getParticipant1());
-        getParticipant1().getFilmstrip()
-            .assertVideoMuteIcon(getParticipant2(), true);
+        getParticipant1().getParticipantsPane().assertIsParticipantVideoMuted(getParticipant2(), true);
 
-        // we check whether avatar of participant2 is same on both sides
-        // and we check whether it had changed after reloading the page
-        assertEquals(
-            getLocalThumbnailSrc(driver2),
-            participant2AvatarSrc);
-        assertEquals(
-            getThumbnailSrc(driver1, participant2EndpointId),
-            participant2AvatarSrc);
+        // we check whether the default avatar of participant2 is displayed on both sides
+        TestUtils.waitForElementByXPath(
+                driver1, MeetUIUtils.getDefaultAvatarXpathForParticipant(getParticipant2().getEndpointId()), 20);
+        TestUtils.waitForElementByXPath(
+                driver2, MeetUIUtils.getDefaultAvatarXpathForLocal(), 20);
 
         // Start the third participant
         ensureThreeParticipants();
-        WebDriver driver3 = getParticipant3().getDriver();
 
-        String participant2Src = getLocalThumbnailSrc(driver2);
+        // Temporary wait few seconds so the avatar to be downloaded from libravatar
+        // Seems there is some delay when requesting it
+        TestUtils.waitMillis(3000);
+
+        WebDriver driver3 = getParticipant3().getDriver();
 
         // Pin local video and verify avatars are displayed
         MeetUIUtils.clickOnLocalVideo(driver3);
 
         MeetUIUtils.assertAvatarDisplayed(driver3, participant1EndpointId);
-        MeetUIUtils.assertAvatarDisplayed(driver3, participant2EndpointId);
+        MeetUIUtils.assertAvatarDisplayed(driver3, participant2EndpointId, true);
 
-        assertEquals(
-            getThumbnailSrc(driver3, participant2EndpointId),
-            participant2Src);
+        TestUtils.waitForElementByXPath(
+                driver3, MeetUIUtils.getDefaultAvatarXpathForParticipant(getParticipant2().getEndpointId()), 20);
+        TestUtils.waitForElementByXPath(
+                driver2, MeetUIUtils.getDefaultAvatarXpathForLocal(), 20);
         assertEquals(
             getThumbnailSrc(driver3, participant1EndpointId),
             participant1ThumbSrc);
@@ -154,7 +144,7 @@ public class AvatarTest
         // display name instead of an avatar, local video displayed
         MeetUIUtils.waitsForLargeVideoSwitch(driver3, participant1EndpointId);
         MeetUIUtils.assertDisplayNameVisible(driver3, participant1EndpointId);
-        MeetUIUtils.assertAvatarDisplayed(driver3, participant2EndpointId);
+        MeetUIUtils.assertAvatarDisplayed(driver3, participant2EndpointId, true);
         MeetUIUtils.assertLocalThumbnailShowsVideo(driver3);
 
         // Click on participant2's video
@@ -170,11 +160,9 @@ public class AvatarTest
 
         // Unmute participant1's and participant2's videos
         stopVideoTest.startVideoOnParticipant1AndCheck();
-        getParticipant2().getFilmstrip()
-            .assertVideoMuteIcon(getParticipant1(), false);
+        getParticipant2().getParticipantsPane().assertIsParticipantVideoMuted(getParticipant1(), false);
         stopVideoTest.startVideoOnParticipantAndCheck();
-        getParticipant2().getFilmstrip()
-            .assertVideoMuteIcon(getParticipant1(), false);
+        getParticipant2().getParticipantsPane().assertIsParticipantVideoMuted(getParticipant1(), false);
     }
 
     /**
@@ -203,7 +191,8 @@ public class AvatarTest
             "Current email has wrong value");
 
         getParticipant1().hangUp();
-        ensureTwoParticipants();
+
+        ensureTwoParticipants(null, null, new WebParticipantOptions().setSkipDisplayNameSet(true), null);
 
         getParticipant1().getToolbar().clickProfileButton();
         currentEmailValue
@@ -229,9 +218,7 @@ public class AvatarTest
 
         final String participant1EndpointId = participant1.getEndpointId();
 
-        String participant1AvatarXPath
-            = "//span[@id='participant_" + participant1EndpointId
-                + "']//img[contains(@class,'userAvatar')]";
+        String participant1AvatarXPath = MeetUIUtils.getDefaultAvatarXpathForParticipant(participant1EndpointId);
 
         // Wait for the avatar element to be created
         TestUtils.waitForElementByXPath(
@@ -294,13 +281,11 @@ public class AvatarTest
                 return currentSrc.contains(HASH);
             });
 
-        // we check whether avatar of participant2 is same on both sides
-        // and we stored to check it after reload
-        participant2AvatarSrc = getLocalThumbnailSrc(driver2);
-        String participant2EndpointId = participant2.getEndpointId();
-        assertEquals(
-            getThumbnailSrc(driver1, participant2EndpointId),
-            participant2AvatarSrc);
+        // we check whether the default avatar of participant2 is displayed on both sides
+        TestUtils.waitForElementByXPath(
+                driver1, MeetUIUtils.getDefaultAvatarXpathForParticipant(participant2.getEndpointId()), 20);
+        TestUtils.waitForElementByXPath(
+                driver2, MeetUIUtils.getDefaultAvatarXpathForLocal(), 20);
 
         // the problem on FF where we can send keys to the input field,
         // and the m from the text can mute the call, check whether we are muted
@@ -334,12 +319,9 @@ public class AvatarTest
      *                    whom we want to obtain avatar src
      * @return string value of avatar's 'src' attribute
      */
-    private String getThumbnailSrc(WebDriver perspective, String endpointId)
+    public static String getThumbnailSrc(WebDriver perspective, String endpointId)
     {
-        return getSrcByXPath(
-            perspective,
-            "//span[@id='participant_" + endpointId
-                + "']//img[contains(@class,'userAvatar')]");
+        return getSrcByXPath(perspective, MeetUIUtils.getAvatarXpathForParticipant(endpointId));
     }
 
     /**
@@ -347,11 +329,9 @@ public class AvatarTest
      * @param perspective where are we checking this ?
      * @return string value of avatar's 'src' attribute
      */
-    private String getLocalThumbnailSrc(WebDriver perspective)
+    public static String getLocalThumbnailSrc(WebDriver perspective)
     {
-        return getSrcByXPath(
-            perspective,
-            "//span[@id='localVideoContainer']//img[contains(@class,'userAvatar')]");
+        return getSrcByXPath(perspective, MeetUIUtils.getAvatarXpathForLocal());
     }
 
     /**

@@ -84,12 +84,12 @@ public class MaxUsersTest
             Participant[] participants = new Participant[MAX_USERS - 2];
             try
             {
-                for(int i = 0; i < participants.length; i++)
+                for (int i = 0; i < participants.length; i++)
                 {
                     participants[i] =
                         this.participants
                             .createParticipant("web.participant" + (i + 4));
-                    participants[i].joinConference(currentRoomName);
+                    participants[i].joinConference(getJitsiMeetUrl());
                 }
                 // Check if the error dialog is displayed for
                 // the last participant.

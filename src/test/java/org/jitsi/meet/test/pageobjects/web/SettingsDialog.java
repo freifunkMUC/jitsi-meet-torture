@@ -5,6 +5,7 @@ import org.jitsi.meet.test.web.*;
 import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.*;
 
+import java.time.*;
 import java.util.*;
 
 public class SettingsDialog
@@ -19,7 +20,9 @@ public class SettingsDialog
         = "#setDisplayName";
     private final static String EMAIL_FIELD = "#setEmail";
     private final static String FOLLOW_ME_CHECKBOX = "[name='follow-me']";
+    private final static String HIDE_SELF_VIEW_CHECKBOX = "[name='hide-self-view']";
     private final static String MORE_TAB_CONTENT = ".more-tab";
+    private final static String MODERATOR_TAB_CONTENT = ".moderator-tab";
     private final static String SETTINGS_DIALOG = ".settings-dialog";
     private final static String SETTINGS_DIALOG_CONTENT = ".settings-pane";
     private final static String START_AUDIO_MUTED_CHECKBOX
@@ -27,7 +30,9 @@ public class SettingsDialog
     private final static String START_VIDEO_MUTED_CHECKBOX
         = "[name='start-video-muted']";
     private final static String X_PATH_MORE_TAB
-        =  "//div[contains(@class, 'settings-dialog')]//*[text()='More']";
+        =  "//div[contains(@class, 'settings-dialog')]//*[text()='General']";
+    private final static String X_PATH_MODERATOR_TAB
+        =  "//div[contains(@class, 'settings-dialog')]//*[text()='Moderator']";
     private final static String X_PATH_PROFILE_TAB
         =  "//div[contains(@class, 'settings-dialog')]//*[text()='Profile']";
 
@@ -91,7 +96,15 @@ public class SettingsDialog
      */
     public boolean isFollowMeDisplayed()
     {
-        openMoreTab();
+        try
+        {
+            openModeratorTab();
+        }
+        catch (Exception e)
+        {
+            // if there is no access to the Moderator tab the settings in it won't be displayed
+            return false;
+        }
 
         WebDriver driver = participant.getDriver();
         List<WebElement> followMeCheckboxes
@@ -114,11 +127,33 @@ public class SettingsDialog
     }
 
     /**
+     * Selects the Moderator tab to be displayed.
+     */
+    public void openModeratorTab()
+    {
+        openTab(X_PATH_MODERATOR_TAB);
+
+        TestUtils.waitForElementBy(
+            participant.getDriver(),
+            By.cssSelector(MODERATOR_TAB_CONTENT),
+            5);
+    }
+
+    /**
      * Selects the Profile tab to be displayed.
      */
     public void openProfileTab()
     {
        openTab(X_PATH_PROFILE_TAB);
+    }
+
+    /**
+     * Sets the option for hiding the self view.
+     */
+    public void setHideSelfView(boolean enable)
+    {
+        openMoreTab();
+        setCheckbox(HIDE_SELF_VIEW_CHECKBOX, enable);
     }
 
     /**
@@ -137,7 +172,7 @@ public class SettingsDialog
      */
     public void setFollowMe(boolean enable)
     {
-        openMoreTab();
+        openModeratorTab();
         setCheckbox(FOLLOW_ME_CHECKBOX, enable);
     }
 
@@ -146,7 +181,7 @@ public class SettingsDialog
      */
     public void setStartAudioMuted(boolean enable)
     {
-        openMoreTab();
+        openModeratorTab();
         setCheckbox(START_AUDIO_MUTED_CHECKBOX, enable);
     }
 
@@ -155,7 +190,7 @@ public class SettingsDialog
      */
     public void setStartVideoMuted(boolean enable)
     {
-        openMoreTab();
+        openModeratorTab();
         setCheckbox(START_VIDEO_MUTED_CHECKBOX, enable);
     }
 
@@ -192,7 +227,7 @@ public class SettingsDialog
         WebDriver driver = participant.getDriver();
 
         TestUtils.waitForElementBy(driver, By.xpath(xPathSelectorForTab), 5);
-        WebDriverWait wait = new WebDriverWait(driver, 10);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         WebElement element = wait.until(ExpectedConditions.elementToBeClickable(
             By.xpath(xPathSelectorForTab)));
 
@@ -210,8 +245,9 @@ public class SettingsDialog
 
         boolean isChecked = checkbox.isSelected();
 
-        if (check != isChecked) {
-            checkbox.click();
+        if (check != isChecked)
+        {
+            ((JavascriptExecutor)driver).executeScript("arguments[0].click();", checkbox);
         }
     }
 }

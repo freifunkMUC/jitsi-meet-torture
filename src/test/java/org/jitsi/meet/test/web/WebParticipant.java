@@ -1,5 +1,5 @@
 /*
- * Copyright @ 2015 Atlassian Pty Ltd
+ * Copyright @ 2018 8x8 Pty Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import org.openqa.selenium.interactions.*;
 import org.openqa.selenium.remote.*;
 import org.openqa.selenium.support.ui.*;
 
+import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.*;
@@ -40,7 +41,7 @@ public class WebParticipant extends Participant<WebDriver>
     /**
      * Default config for Web participants.
      */
-    private static final String DEFAULT_CONFIG
+    public static final String DEFAULT_CONFIG
         = "config.requireDisplayName=false"
             + "&config.debug=true"
             + "&config.testing.testMode=true"
@@ -48,9 +49,11 @@ public class WebParticipant extends Participant<WebDriver>
             + "&config.disableNS=true"
             + "&config.enableTalkWhileMuted=false"
             + "&config.callStatsID=false"
-            + "&config.alwaysVisibleToolbar=true"
+            + "&config.toolbarConfig.alwaysVisible=true"
             + "&config.p2p.enabled=false"
             + "&config.p2p.useStunTurn=false"
+            + "&config.pcStatsInterval=1500"
+            + "&config.prejoinConfig.enabled=false"
             + "&config.gatherStats=true"
             + "&config.disable1On1Mode=true"
             + "&config.analytics.disabled=true"
@@ -63,6 +66,27 @@ public class WebParticipant extends Participant<WebDriver>
      */
     private static final String IS_MUC_JOINED =
         "return APP.conference.isJoined();";
+
+    /**
+     * The javascript code which returns {@code true} if we are a moderator.
+     */
+    private static final String IS_MODERATOR =
+        "return APP.store.getState()['features/base/participants']"
+            + ".local.role === 'moderator'";
+
+    /**
+     * The javascript code which returns {@code true} if we have the
+     * functionality to grant moderator.
+     */
+    private static final String HAS_GRANT_MODERATOR =
+        "return typeof APP.conference._room.grantOwner === 'function'";
+
+    /**
+     * The javascript code which returns {@code true} if breakout rooms are supported.
+     */
+    private static final String BREAKOUT_ROOMS_SUPPORTED =
+        "return APP.store.getState()['features/base/conference'].conference?.getBreakoutRooms" +
+        " && APP.store.getState()['features/base/conference'].conference?.getBreakoutRooms()?.isSupported()";
 
     /**
      * The javascript code which returns {@code true} if the ICE connection
@@ -78,13 +102,23 @@ public class WebParticipant extends Participant<WebDriver>
         "return APP.conference._room.getParticipants().map(p => p._id);";
 
     private ChatPanel chatPanel;
+    private AVModerationMenu avModerationMenu;
+    private BreakoutRoomsList breakoutRoomsList;
     private DialInNumbersPage dialInNumbersPage;
+    private Dialogs dialogs;
     private InviteDialog inviteDialog;
     private LargeVideo largeVideo;
+    private LobbyScreen lobbyScreen;
+    private Notifications notifications;
+    private ParticipantsPane participantsPane;
+    private PreJoinScreen preJoinScreen;
     private SecurityDialog securityDialog;
     private SettingsDialog settingsDialog;
     private Toolbar toolbar;
     private WebFilmstrip filmstrip;
+
+    private final boolean isLoadTest;
+    private final boolean saveLogs;
 
     /**
      * Constructs a Participant.
@@ -92,11 +126,46 @@ public class WebParticipant extends Participant<WebDriver>
      * @param name    the name.
      * @param driver  its driver instance.
      * @param type    the type (type of browser).
+     * @param isLoadTest is this a load test participant.
+     * @param saveLogs is save logs on hangup enabled.
      */
     public WebParticipant(
-            String name, WebDriver driver, ParticipantType type)
+            String name, WebDriver driver, ParticipantType type, boolean isLoadTest, boolean saveLogs)
     {
         super(name, driver, type, DEFAULT_CONFIG);
+        this.isLoadTest = isLoadTest;
+        this.saveLogs = saveLogs;
+    }
+
+    public String getBridgeIp()
+    {
+        // With the default stats interval (10s) this can take up to 20 seconds.
+        // We wait for 30 to give ourselves some margin.
+        return new WebDriverWait(driver, Duration.ofSeconds(30)).until(d -> {
+
+            RtpStatistics rtpStats
+                = new WebRtpStatistics((JavascriptExecutor) d);
+
+            if (rtpStats.getRtpTransport().isP2P())
+            {
+                return null;
+            }
+
+            String socket = rtpStats.getRtpTransport().getRemoteSocket();
+            if (socket == null)
+            {
+                return null;
+            }
+
+            String ip = socket.split(":")[0];
+
+            if ("".equals(ip))
+            {
+                return null;
+            }
+
+            return ip;
+        });
     }
 
     /**
@@ -126,58 +195,70 @@ public class WebParticipant extends Participant<WebDriver>
                 + "will skip it and continue:" + ex.getMessage());
         }
 
+        // let's check is APP global object available if not, we may be missing resources
+        // then check for id='showMore' and click it
+        try
+        {
+            executeScript("window.APP === undefined && document.getElementById('showMore')" +
+                              " && document.getElementById('showMore').click();");
+        }
+        catch(Exception e)
+        {
+            // ignore
+        }
+
         if (conferenceUrl.getIframeToNavigateTo() != null)
         {
             // let's wait for loading and switch to that iframe so we can continue
             // with regular tests
-            WebDriverWait wait = new WebDriverWait(driver, 10);
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(60));
             wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(
                 By.id(conferenceUrl.getIframeToNavigateTo())));
         }
-        else
+
+        MeetUtils.waitForPageToLoad(driver);
+
+        if (!isLoadTest)
         {
-            MeetUtils.waitForPageToLoad(driver);
+            // disables animations
+            executeScript("try { jQuery.fx.off = true; } catch(e) {}");
+
+            executeScript("APP.UI.dockToolbar(true);");
+
+            // disable keyframe animations (.fadeIn and .fadeOut classes)
+            executeScript("$('<style>.notransition * { "
+                + "animation-duration: 0s !important; "
+                + "-webkit-animation-duration: 0s !important; transition:none; }"
+                + " </style>').appendTo(document.head);");
+            executeScript("$('body').toggleClass('notransition');");
+
+            // disable the blur effect in firefox as it has some performance issues
+            if (this.type.isFirefox())
+            {
+                executeScript(
+                    "try { var blur "
+                        + "= document.querySelector('.video_blurred_container'); "
+                        + "if (blur) { "
+                        + "document.querySelector('.video_blurred_container')"
+                        + ".style.display = 'none' "
+                        + "} } catch(e) {}");
+            }
         }
 
-        // disables animations
-        executeScript("try { jQuery.fx.off = true; } catch(e) {}");
+        String version = TestUtils.executeScriptAndReturnString(driver, "return JitsiMeetJS.version");
+        String sessionID = (driver instanceof RemoteWebDriver ?
+            ((RemoteWebDriver)driver).getSessionId().toString() :
+            (driver instanceof TabbedWebDriver) ?
+                ((TabbedWebDriver)driver).getSessionId() : null);
 
-        executeScript("APP.UI.dockToolbar(true);");
-
-        // disable keyframe animations (.fadeIn and .fadeOut classes)
-        executeScript("$('<style>.notransition * { "
-            + "animation-duration: 0s !important; "
-            + "-webkit-animation-duration: 0s !important; transition:none; }"
-            + " </style>').appendTo(document.head);");
-        executeScript("$('body').toggleClass('notransition');");
-
-        // disable the blur effect in firefox as it has some performance issues
-        if (this.type.isFirefox())
-        {
-            executeScript(
-                "try { var blur "
-                    + "= document.querySelector('.video_blurred_container'); "
-                    + "if (blur) { "
-                    + "document.querySelector('.video_blurred_container')"
-                    + ".style.display = 'none' "
-                    + "} } catch(e) {}");
-        }
-
-        if ("false".equals(conferenceUrl.getFragmentParam("config.callStatsID")))
-        {
-            // Hack-in disabling of callstats (old versions of jitsi-meet don't
-            // handle URL parameters)
-            executeScript("config.callStatsID=false;");
-        }
-
-        String version = TestUtils.executeScriptAndReturnString(driver,
-            "return JitsiMeetJS.version;");
         TestUtils.print(name + " lib-jitsi-meet version: " + version
-            + (driver instanceof RemoteWebDriver ?
-                " sessionID: "
-                    + ((RemoteWebDriver)driver).getSessionId() : ""));
+            + (sessionID != null ?
+                " sessionID: " + sessionID : ""));
 
-        executeScript("document.title='" + name + "'");
+        if (!isLoadTest)
+        {
+            executeScript("document.title='" + name + "'");
+        }
     }
 
     /**
@@ -186,9 +267,28 @@ public class WebParticipant extends Participant<WebDriver>
     @Override
     protected void doHangUp()
     {
-        getToolbar().clickHangUpButton();
+        if (this.saveLogs)
+        {
+            FailureListener.saveBrowserLogs("on-hangup", this);
+        }
 
-        TestUtils.waitMillis(500);
+        if (!isLoadTest)
+        {
+            try
+            {
+                // we use here the command instead of toolbar button as toolbar button causes a redirect
+                // on some deployments and that with combination of iframe can cause some issue when navigating after
+                // that to about:blank. We were seeing 504 gateway timeout errors between hub and nodes.
+                executeScript("APP.conference.leaveRoom(true);");
+            }
+            catch(Exception e)
+            {
+                // there are cases where we had already hanged up
+            }
+
+            // wait here to make sure the command above has finished
+            TestUtils.waitMillis(500);
+        }
         // open a blank page after hanging up, to make sure
         // we will successfully navigate to the new link containing the
         // parameters, which change during testing
@@ -252,17 +352,15 @@ public class WebParticipant extends Participant<WebDriver>
                 = executeScript(
                 "try{ "
                         + "return JSON.stringify("
-                        + "  APP.conference.getLogs(), null, '    ');"
-                        + "}catch (e) {}");
+                        + "  APP.connection.getLogs(), null, '    ');"
+                        + "}catch (e) { return e.message; }");
 
             return log instanceof String ? (String) log : null;
         }
         catch (Exception e)
         {
-            Logger.getGlobal().log(
-                    Level.SEVERE,
-                    "Failed to get meet logs from " + name,
-                    e);
+            Logger.getGlobal().log(Level.SEVERE,
+                "Failed to get meet logs from " + name + ": " + e.getMessage());
 
             return null;
         }
@@ -284,10 +382,8 @@ public class WebParticipant extends Participant<WebDriver>
         }
         catch (Exception e)
         {
-            Logger.getGlobal().log(
-                    Level.SEVERE,
-                    "Failed to get meet rtp stats from " + name,
-                    e);
+            Logger.getGlobal().log(Level.SEVERE,
+                "Failed to get meet rtp stats from " + name + " " + e.getMessage());
 
             return null;
         }
@@ -339,15 +435,6 @@ public class WebParticipant extends Participant<WebDriver>
     }
 
     /**
-     * Whether this participant supports video, based on the browser type.
-     * @return {@code true} if the participant browser do not support video.
-     */
-    public boolean isAudioOnlyParticipant()
-    {
-        return getType() == ParticipantType.safari;
-    }
-
-    /**
      * {@inheritDoc}
      */
     protected boolean isIceConnected()
@@ -367,6 +454,38 @@ public class WebParticipant extends Participant<WebDriver>
     {
         Object res = executeScript(IS_MUC_JOINED);
         return res != null && res.equals(Boolean.TRUE);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isModerator()
+    {
+        Object res = executeScript(IS_MODERATOR);
+        return Boolean.TRUE.equals(res);
+    }
+
+    /**
+     * Checks if the meeting supports breakout rooms.
+     *
+     * @retuns {@code true} if breakout rooms are supported
+     * otherwise {@code false}
+     */
+    public boolean supportsBreakoutRooms()
+    {
+        Object res = executeScript(BREAKOUT_ROOMS_SUPPORTED);
+        return Boolean.TRUE.equals(res);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean hasGrantModerator()
+    {
+        Object res = executeScript(HAS_GRANT_MODERATOR);
+        return Boolean.TRUE.equals(res);
     }
 
     /**
@@ -431,18 +550,19 @@ public class WebParticipant extends Participant<WebDriver>
                     + "//input[@id='editDisplayName']"));
         actions = new Actions(driver);
         actions.moveToElement(inputElem);
-        actions.perform();
 
         if (name != null && name.length() > 0)
         {
-            inputElem.sendKeys(name);
+            actions.sendKeys(name);
         }
         else
         {
-            inputElem.sendKeys(Keys.BACK_SPACE);
+            actions.sendKeys(Keys.BACK_SPACE);
         }
 
-        inputElem.sendKeys(Keys.RETURN);
+        actions.sendKeys(Keys.RETURN);
+        actions.perform();
+
         // just click somewhere to lose focus, to make sure editing has ended
         MeetUIUtils.clickOnLocalVideo(driver);
     }
@@ -490,6 +610,20 @@ public class WebParticipant extends Participant<WebDriver>
         return executeScript("return config." + key);
     }
 
+
+    /**
+     * @return a representation of the av moderation menu of this participant.
+     */
+    public AVModerationMenu getAVModerationMenu()
+    {
+        if (avModerationMenu == null)
+        {
+            avModerationMenu = new AVModerationMenu(this);
+        }
+
+        return avModerationMenu;
+    }
+
     /**
      * @return a representation of the dial in page of this participant.
      */
@@ -517,6 +651,19 @@ public class WebParticipant extends Participant<WebDriver>
     }
 
     /**
+     * @return a representation of the list of knocking participants.
+     */
+    public BreakoutRoomsList getBreakoutRoomsList()
+    {
+        if (breakoutRoomsList == null)
+        {
+            breakoutRoomsList = new BreakoutRoomsList(this);
+        }
+
+        return breakoutRoomsList;
+    }
+
+    /**
      * @return a representation of the large video of this participant.
      */
     public LargeVideo getLargeVideo()
@@ -527,6 +674,72 @@ public class WebParticipant extends Participant<WebDriver>
         }
 
         return largeVideo;
+    }
+
+    /**
+     * @return a representation of the lobby.
+     */
+    public LobbyScreen getLobbyScreen()
+    {
+        if (lobbyScreen == null)
+        {
+            lobbyScreen = new LobbyScreen(this);
+        }
+
+        return lobbyScreen;
+    }
+
+
+    /**
+     * @return a representation of the dialogs.
+     */
+    public Dialogs getDialogs()
+    {
+        if (dialogs == null)
+        {
+            dialogs = new Dialogs(this);
+        }
+
+        return dialogs;
+    }
+
+    /**
+     * @return a representation of the notifications.
+     */
+    public Notifications getNotifications()
+    {
+        if (notifications == null)
+        {
+            notifications = new Notifications(this);
+        }
+
+        return notifications;
+    }
+
+    /**
+     * @return a representation of the participants pane of this participant.
+     */
+    public ParticipantsPane getParticipantsPane()
+    {
+        if (participantsPane == null)
+        {
+             participantsPane = new ParticipantsPane(this);
+        }
+
+        return participantsPane;
+    }
+
+    /**
+     * @return a representation of the pre join screen.
+     */
+    public PreJoinScreen getPreJoinScreen()
+    {
+        if (preJoinScreen == null)
+        {
+            preJoinScreen = new PreJoinScreen(this);
+        }
+
+        return preJoinScreen;
     }
 
     /**
@@ -593,7 +806,6 @@ public class WebParticipant extends Participant<WebDriver>
     }
 
     /**
-     /**
      * A list of log string entries.
      *
      * @return a list of log entries.
@@ -613,5 +825,32 @@ public class WebParticipant extends Participant<WebDriver>
                 "Failed to obtain browser logs:" + t.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Mute or unmute this participant's audio, through the API.
+     */
+    public void muteAudio(boolean mute)
+    {
+        executeScript("APP.conference.muteAudio(arguments[0])", mute);
+    }
+
+    /**
+     *  Mute or unmute a single client's audio in a multi-client load test participant, through the API.
+     */
+    public void muteOneAudio(boolean mute, int num)
+    {
+        executeScript("APP.conference.muteAudio(arguments[0], arguments[1])", mute, num);
+    }
+
+    /**
+     * Prints logs in the jitsi-meet app that will be available as test results.
+     * @param from the source that prints (the test class).
+     * @param log the log to print.
+     */
+    public void consolePrint(String from, String log)
+    {
+        this.executeScript(
+            "APP.debugLogs.storeLogs([{ text: new Date().toISOString() + \" [" + from + "] " + log +"\" }]);");
     }
 }

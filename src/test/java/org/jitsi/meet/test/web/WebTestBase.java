@@ -19,7 +19,6 @@ import org.jitsi.meet.test.base.*;
 import org.jitsi.meet.test.util.*;
 import org.openqa.selenium.*;
 
-import java.util.*;
 import java.util.logging.*;
 
 /**
@@ -78,7 +77,7 @@ public class WebTestBase
      * @param options custom options to be used for the new participant.
      */
     public void ensureOneParticipant(
-        JitsiMeetUrl meetURL, ParticipantOptions options)
+        JitsiMeetUrl meetURL, WebParticipantOptions options)
     {
         joinParticipantAndWait(0, meetURL, options);
     }
@@ -121,8 +120,8 @@ public class WebTestBase
     public void ensureTwoParticipants(
         JitsiMeetUrl participantOneMeetURL,
         JitsiMeetUrl participantTwoMeetURL,
-        ParticipantOptions participantOneOptions,
-        ParticipantOptions participantTwoOptions)
+        WebParticipantOptions participantOneOptions,
+        WebParticipantOptions participantTwoOptions)
     {
         ensureTwoParticipantsInternal(
             participantOneMeetURL,
@@ -146,17 +145,22 @@ public class WebTestBase
     private void ensureTwoParticipantsInternal(
         JitsiMeetUrl participantOneMeetURL,
         JitsiMeetUrl participantTwoMeetURL,
-        ParticipantOptions participantOneOptions,
-        ParticipantOptions participantTwoOptions)
+        WebParticipantOptions participantOneOptions,
+        WebParticipantOptions participantTwoOptions)
     {
         ensureOneParticipant(participantOneMeetURL, participantOneOptions);
 
-        Participant participant
+        Participant participant1 = getParticipant1();
+        Participant participant2
             = joinParticipantAndWait(
                 1, participantTwoMeetURL, participantTwoOptions);
 
-        participant.waitForIceConnected();
-        participant.waitForSendReceiveData();
+        participant1.waitForIceConnected();
+        participant1.waitForSendReceiveData();
+
+        participant2.waitForIceConnected();
+        participant2.waitForSendReceiveData();
+
 
         // FIXME missing a comment on why is it needed here (in case someone
         // would want to come up with a proper fix).
@@ -201,6 +205,15 @@ public class WebTestBase
     }
 
     /**
+     * Starts participant1, participant2 and participant3 if they are not started.
+     * @param url The url to be used for all the three participants.
+    */
+    public void ensureThreeParticipants(JitsiMeetUrl url)
+    {
+        ensureThreeParticipants(url, url, url);
+    }
+
+    /**
      * @return the {@code id}-th participant as a {@link WebParticipant}.
      * @param id 1-based index of the participant.
      */
@@ -237,6 +250,15 @@ public class WebTestBase
     }
 
     /**
+     * Returns the fourth participant.
+     * @return the fourth participant.
+     */
+    public WebParticipant getParticipant4()
+    {
+        return getParticipant(4);
+    }
+
+    /**
      * Hangups all participants.
      */
     public void hangUpAllParticipants()
@@ -270,29 +292,15 @@ public class WebTestBase
     private WebParticipant joinParticipant(
         int                     index,
         JitsiMeetUrl            meetURL,
-        ParticipantOptions      options)
+        WebParticipantOptions      options)
     {
         WebParticipant p = participants.get(index);
 
         if (p == null)
         {
-            // There's an assumption that the participants are created
-            // starting from 0, 1, 2, so throw an Exception if they happen to be
-            // created in different order.
-            int size = participants.getAll().size();
-            if (index != size)
-            {
-                throw new IllegalArgumentException(
-                        String.format(
-                                "New participant would have been inserted at different "
-                                        + "index than expected. Index: %d, size %d.",
-                                index,
-                                size));
-            }
-
             String configPrefix = "web.participant" + (index + 1);
 
-            p = participants.createParticipant(configPrefix, options);
+            p = participants.createParticipant(index, configPrefix, options);
 
             // Adds a print in the console/selenium-node logs
             // useful when checking crashes or failures in node logs
@@ -306,6 +314,13 @@ public class WebTestBase
             meetURL = getJitsiMeetUrl();
         }
 
+        if (options == null || !options.getSkipDisplayNameSet())
+        {
+            // participant names are `web.participantN` we drop `web.`. Shorter for display in thumbs and avatar is PN.
+            String displayName = p.getName().replaceAll("web\\.", "");
+            meetURL.appendConfig("userInfo.displayName=\"" + displayName + "\"", true);
+        }
+
         p.joinConference(meetURL);
 
         return p;
@@ -317,7 +332,19 @@ public class WebTestBase
      */
     public WebParticipant joinFirstParticipant()
     {
-        return joinParticipant(0, null, null);
+        return joinFirstParticipant(null, null);
+    }
+
+    /**
+     * Joins the first participant to a specified {@link JitsiMeetUrl}.
+     * @param meetUrl a {@link JitsiMeetUrl} which represents the full
+     * conference URL which includes server, conference parameters and
+     * the config part.
+     * @return the participant which was created.
+     */
+    public WebParticipant joinFirstParticipant(JitsiMeetUrl meetUrl, WebParticipantOptions options)
+    {
+        return joinParticipant(0, meetUrl, options);
     }
 
     /**
@@ -330,12 +357,7 @@ public class WebTestBase
      */
     public WebParticipant joinSecondParticipant(JitsiMeetUrl meetUrl)
     {
-        WebParticipant participant = joinParticipant(1, meetUrl, null);
-
-        participant.waitToJoinMUC(10);
-        participant.waitForIceConnected();
-
-        return participant;
+        return joinParticipant(1, meetUrl, null);
     }
 
     /**
@@ -353,7 +375,32 @@ public class WebTestBase
      */
     public WebParticipant joinThirdParticipant()
     {
-        return joinParticipantAndWait(2, null, null);
+        return joinThirdParticipant(null, null);
+    }
+
+    /**
+     * Joins the third participant.
+     * @param meetUrl a {@link JitsiMeetUrl} which represents the full
+     * conference URL which includes server, conference parameters and
+     * the config part.
+     * @param options the options to be used when creating the participant.
+     * @return the participant which was created.
+     */
+    public WebParticipant joinThirdParticipant(JitsiMeetUrl meetUrl, WebParticipantOptions options)
+    {
+        return joinParticipant(2, meetUrl, options);
+    }
+
+    /**
+     * Joins the fourth participant.
+     * @param meetUrl a {@link JitsiMeetUrl} which represents the full
+     * conference URL which includes server, conference parameters and
+     * the config part.
+     * @return the participant which was created.
+     */
+    public WebParticipant joinFourthParticipant(JitsiMeetUrl meetUrl)
+    {
+        return joinParticipant(3, meetUrl, null);
     }
 
     /**
@@ -370,7 +417,7 @@ public class WebTestBase
     private WebParticipant joinParticipantAndWait(
         int                     index,
         JitsiMeetUrl            meetURL,
-        ParticipantOptions      options)
+        WebParticipantOptions      options)
     {
         WebParticipant participant = joinParticipant(index, meetURL, options);
 
@@ -378,7 +425,7 @@ public class WebTestBase
         // in the tests logs
         try
         {
-            participant.waitToJoinMUC(10);
+            participant.waitToJoinMUC();
         }
         catch (TimeoutException ex)
         {
@@ -404,5 +451,15 @@ public class WebTestBase
         }
 
         return participant;
+    }
+
+    /**
+     * Prints logs in the jitsi-meet app that will be available as test results.
+     * @param participant The participant in which logs to add the log entry.s
+     * @param log the log to print.
+     */
+    public void consolePrint(WebParticipant participant, String log)
+    {
+        participant.consolePrint(getClass().getSimpleName(), log);
     }
 }

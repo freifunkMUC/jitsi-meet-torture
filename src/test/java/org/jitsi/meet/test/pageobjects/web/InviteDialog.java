@@ -15,11 +15,14 @@
  */
 package org.jitsi.meet.test.pageobjects.web;
 
+import java.time.*;
 import java.util.*;
+import java.util.logging.*;
 
 import org.jitsi.meet.test.util.*;
 import org.jitsi.meet.test.web.*;
 import org.openqa.selenium.*;
+import org.openqa.selenium.support.ui.*;
 
 /**
  * Represents the invite dialog in a particular {@link WebParticipant}.
@@ -60,24 +63,33 @@ public class InviteDialog
     {
         open();
 
-        WebDriver driver = participant.getDriver();
-        WebElement moreNumbersElement
-            = driver.findElement(By.className(MORE_NUMBERS));
-
-        moreNumbersElement.click();
+        // there are cases where a popup may prevent clicking, wait for some time the popup to clear
+        TestUtils.waitForCondition(
+            participant.getDriver(),
+            5,
+            (ExpectedCondition<Boolean>) d -> {
+                try
+                {
+                    d.findElement(By.className(MORE_NUMBERS)).click();
+                    return true;
+                }
+                catch(ElementClickInterceptedException e)
+                {
+                    return false;
+                }
+            });
     }
 
     /**
-     * Clicks the "info" toolbar button which opens or closes the invite dialog.
+     * Clicks the "invite" button which opens or closes the invite dialog.
      */
-    private void clickToolbarButton()
+    private void clickInviteButton()
     {
-        participant.getToolbar().clickInviteButton();
+        participant.getParticipantsPane().clickInvite();
     }
 
     /**
-     * Clicks the "info" toolbar button to close the invite dialog, if the info
-     * dialog is open.
+     * Clicks the info dialog close button, if it is open.
      */
     public void close()
     {
@@ -86,7 +98,7 @@ public class InviteDialog
             return;
         }
 
-        clickToolbarButton();
+        ModalDialogHelper.clickCloseButton(participant.getDriver());
     }
 
     /**
@@ -170,7 +182,13 @@ public class InviteDialog
             return;
         }
 
-        this.clickToolbarButton();
+        if (!participant.getParticipantsPane().isOpen())
+        {
+            participant.getToolbar().clickParticipantsButton();
+            participant.getToolbar().waitForVisible();
+        }
+
+        clickInviteButton();
     }
 
     /**
@@ -190,13 +208,18 @@ public class InviteDialog
 
         // waits for the element to be available before getting the text
         // PHONE_NUMBER for example can take time before shown
-        TestUtils.waitForElementBy(
-            driver,
-            By.className(className),
-            5);
+        TestUtils.waitForElementBy(driver, By.className(className), 5);
 
-        String fullText
-            = driver.findElement(By.className(className)).getText();
+        // sometimes we see FF taking long (more than 5 seconds) to show the dialog
+        // let's wait a little bit longer, give it 5 more seconds to see it
+        String fullText = (new WebDriverWait(driver, Duration.ofSeconds(5))).until((ExpectedCondition<String>) d ->
+        {
+            String text = driver.findElement(By.className(className)).getText();
+
+            return text.split(":").length > 1 ? text : null;
+        });
+
+        Logger.getGlobal().info("Extracted text:'" + fullText + "'");
 
         return fullText.split(":")[1].trim();
     }

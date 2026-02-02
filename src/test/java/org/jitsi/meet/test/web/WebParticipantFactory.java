@@ -27,8 +27,6 @@ import org.openqa.selenium.remote.*;
 import org.openqa.selenium.safari.*;
 
 import java.io.*;
-import java.net.*;
-import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.TimeoutException;
@@ -92,15 +90,45 @@ public class WebParticipantFactory
     @Override
     protected WebParticipant doCreateParticipant(ParticipantOptions options)
     {
-        WebParticipantOptions webOptions = new WebParticipantOptions();
+        WebParticipantOptions webOptions;
+        if (options instanceof WebParticipantOptions)
+        {
+            webOptions = (WebParticipantOptions)options;
+        }
+        else
+        {
+            webOptions = new WebParticipantOptions();
+            webOptions.putAll(options);
+        }
 
-        webOptions.putAll(options);
+        WebDriver driver;
+
+        if (webOptions.getMultitab())
+        {
+            RemoteWebDriver baseDriver;
+            if (webOptions.getBaseDriver() != null)
+            {
+                /* Throws BadCast if this isn't a RemoteWebDriver. */
+                baseDriver = (RemoteWebDriver)webOptions.getBaseDriver();
+            }
+            else
+            {
+                baseDriver = startWebDriver(webOptions);
+            }
+            driver = new TabbedWebDriver(baseDriver);
+        }
+        else
+        {
+            driver = startWebDriver(webOptions);
+        }
 
         WebParticipant webParticipant
             = new WebParticipant(
                     webOptions.getName(),
-                    startWebDriver(webOptions),
-                    webOptions.getParticipantType());
+                    driver,
+                    webOptions.getParticipantType(),
+                    webOptions.getLoadTest(),
+                    webOptions.getSaveLogs());
 
         return webParticipant;
     }
@@ -110,7 +138,7 @@ public class WebParticipantFactory
      * @param options the options to use when creating the driver.
      * @return the <tt>WebDriver</tt> instance.
      */
-    private WebDriver startWebDriver(
+    private RemoteWebDriver startWebDriver(
         WebParticipantOptions options)
     {
         ParticipantType participantType = options.getParticipantType();
@@ -122,7 +150,7 @@ public class WebParticipantFactory
         // by default we load chrome, but we can load safari or firefox
         if (participantType.isFirefox())
         {
-            WebDriverManager.getInstance(DriverManagerType.FIREFOX).setup();
+            WebDriverManager.firefoxdriver().setup();
 
             if (browserBinaryAPath != null
                     && (browserBinaryAPath.exists() || isRemote))
@@ -135,12 +163,22 @@ public class WebParticipantFactory
             FirefoxProfile profile = new FirefoxProfile();
             // Force firefox to use English instead of system language.
             // Not test because of having not firefox installed.
-            profile.setPreference("intl.accept_languages","en");
+            profile.setPreference("intl.accept_languages", "en");
             profile.setPreference("media.navigator.permission.disabled", true);
             // Enables tcp in firefox, disabled by default in 44
             profile.setPreference("media.peerconnection.ice.tcp", true);
             profile.setPreference("media.navigator.streams.fake", true);
-            profile.setAcceptUntrustedCertificates(true);
+            profile.setPreference("media.autoplay.default", 0);
+            if (options.allowsInsecureCerts())
+            {
+                profile.setAcceptUntrustedCertificates(true);
+            }
+
+            FirefoxOptions ffOptions = new FirefoxOptions();
+            if (options.isHeadless())
+            {
+                ffOptions.addArguments("--headless");
+            }
 
             profile.setPreference(
                 "webdriver.log.file", FailureListener.createLogsFolder() +
@@ -152,21 +190,19 @@ public class WebParticipantFactory
                     "/firefox-console-"
                     + options.getName() + ".log");
 
+            ffOptions.setProfile(profile);
+
             if (isRemote)
             {
-                FirefoxOptions ffOptions = new FirefoxOptions();
-                ffOptions.setProfile(profile);
-
                 if (version != null && version.length() > 0)
                 {
-                    ffOptions.setCapability(CapabilityType.VERSION, version);
+                    ffOptions.setBrowserVersion(version);
                 }
 
-                return new RemoteWebDriver(
-                        options.getRemoteDriverAddress(), ffOptions);
+                return new RemoteWebDriver(options.getRemoteDriverAddress(), ffOptions);
             }
 
-            return new FirefoxDriver(new FirefoxOptions().setProfile(profile));
+            return new FirefoxDriver(ffOptions);
         }
         else if (participantType == ParticipantType.safari)
         {
@@ -183,7 +219,7 @@ public class WebParticipantFactory
         }
         else if (participantType == ParticipantType.edge)
         {
-            WebDriverManager.getInstance(DriverManagerType.EDGE).setup();
+            WebDriverManager.edgedriver().setup();
 
             InternetExplorerOptions ieOptions = new InternetExplorerOptions();
             ieOptions.ignoreZoomSettings();
@@ -194,7 +230,7 @@ public class WebParticipantFactory
         }
         else
         {
-            WebDriverManager.getInstance(DriverManagerType.CHROME).setup();
+            WebDriverManager.chromedriver().setup();
 
             System.setProperty("webdriver.chrome.verboseLogging", "true");
             System.setProperty(
@@ -206,9 +242,13 @@ public class WebParticipantFactory
             logPrefs.enable(LogType.BROWSER, Level.ALL);
 
             final ChromeOptions ops = new ChromeOptions();
+            ops.setCapability("nodename:applicationName", options.getApplicationName());
+
             // Force chrome to use English instead of system language.
-            // At least work at version 83.0.4103.61 on win 10
-            ops.addArguments("lang=en");
+            Map<String, Object> prefs = new HashMap<String, Object>();
+            prefs.put("intl.accept_languages", "en-US");
+            ops.setExperimentalOption("prefs", prefs);
+
             ops.addArguments("allow-insecure-localhost");
             ops.addArguments("use-fake-ui-for-media-stream");
             ops.addArguments("use-fake-device-for-media-stream");
@@ -219,22 +259,16 @@ public class WebParticipantFactory
             // shared video tests, disable no-user-gesture to make it work
             ops.addArguments("autoplay-policy=no-user-gesture-required");
 
-            if (options.getChromeExtensionId() != null)
+            String resolverRules = options.hostResolverRules();
+            if (resolverRules != null)
             {
-                try
-                {
-                    ops.addExtensions(
-                        downloadExtension(options.getChromeExtensionId()));
-                }
-                catch (IOException e)
-                {
-                   throw new RuntimeException(e);
-                }
+                ops.addArguments("host-resolver-rules=" + resolverRules);
             }
 
-            ops.addArguments("auto-select-desktop-capture-source=Entire screen");
+            ops.addArguments("auto-select-desktop-capture-source=Your Entire screen");
 
-            ops.setCapability(CapabilityType.LOGGING_PREFS, logPrefs);
+            ops.setCapability("goog:loggingPrefs", logPrefs);
+            ops.setCapability(CapabilityType.ACCEPT_INSECURE_CERTS, options.allowsInsecureCerts());
 
             if (options.isChromeSandboxDisabled())
             {
@@ -246,7 +280,7 @@ public class WebParticipantFactory
             if (options.isHeadless())
             {
                 ops.addArguments("headless");
-                ops.addArguments("window-size=1200x600");
+                ops.addArguments("window-size=1400,600");
             }
 
             // starting version 46 we see crashes of chrome GPU process when
@@ -299,18 +333,18 @@ public class WebParticipantFactory
             }
 
             //ops.addArguments("vmodule=\"*media/*=3,*turn*=3\"");
-            ops.addArguments("enable-logging");
-            ops.addArguments("vmodule=*=3");
+            //ops.addArguments("enable-logging");
+            //ops.addArguments("vmodule=*=3");
 
             if (isRemote)
             {
                 if (version != null && version.length() > 0)
                 {
-                    ops.setCapability(CapabilityType.VERSION, version);
+                    ops.setCapability(CapabilityType.BROWSER_VERSION, version);
+                    ops.setBrowserVersion(version);
                 }
 
-                return new RemoteWebDriver(
-                        options.getRemoteDriverAddress(), ops);
+                return new RemoteWebDriver(options.getRemoteDriverAddress(), ops);
             }
 
             try
@@ -360,29 +394,5 @@ public class WebParticipantFactory
             TestUtils.print("Just create ChromeDriver, may hang!");
             return new ChromeDriver(ops);
         }
-    }
-
-    /**
-     * Downloads an extension from the chrome webstore.
-     * @param id - the id of the extension.
-     * @returns <tt>File</tt> associated with the downloaded extension.
-     */
-    private static File downloadExtension(String id)
-        throws IOException
-    {
-        URL website = new URL(String.format(EXT_DOWNLOAD_URL_FORMAT, id));
-        File extension = File.createTempFile("jidesha", ".crx");
-        extension.deleteOnExit();
-
-        try(
-            ReadableByteChannel rbc = Channels.newChannel(website.openStream());
-            FileOutputStream fos = new FileOutputStream(extension);
-            FileChannel fc = fos.getChannel();
-        )
-        {
-            fc.transferFrom(rbc, 0, Long.MAX_VALUE);
-        }
-
-        return extension;
     }
 }

@@ -21,6 +21,7 @@ import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.interactions.*;
 import org.openqa.selenium.support.ui.*;
 
+import java.time.*;
 import java.util.*;
 
 import static org.testng.Assert.*;
@@ -33,6 +34,25 @@ import static org.testng.Assert.*;
  */
 public class MeetUIUtils
 {
+    /**
+     * The string template for finding thumbnail by endpoint id using xpath.
+     */
+    private static String REMOTE_THUMB_BY_ENDPOINT_ID_TMPL
+        = "//span[starts-with(@id, 'participant_%s') and contains(@class,'videocontainer')]";
+
+    /**
+     * The string template for finding thumbnail by id using xpath.
+     * ID can be `localVideoContainer` or "participant_" + participantEndpointId.
+     */
+    private static String AVATAR_XPATH_TMPL = "//span[@id='%s']//img[contains(@class,'userAvatar')]";
+
+    /**
+     * The string template for finding thumbnail default avatar by id using xpath.
+     * ID can be `localVideoContainer` or "participant_" + participantEndpointId.
+     */
+    private static String DEFAULT_AVATAR_XPATH_TMPL
+        = "//span[@id='%s']//div[contains(@class,'userAvatar') and contains(@class, 'defaultAvatar')]";
+
     /**
      * Check if on the large video there is "grey" avatar displayed and if not
      * fails the current test. The check consists of 3 steps:
@@ -202,12 +222,13 @@ public class MeetUIUtils
             driver,
             5,
             (ExpectedCondition<Boolean>)
-                webDriver -> {
+                webDriver ->
+                {
                     WebElement el
                         = webDriver.findElement(By.xpath(largeVideoXPath));
 
-                    return !el.getAttribute("class")
-                        .contains("remoteVideoProblemFilter");});
+                    return !el.getAttribute("class").contains("remoteVideoProblemFilter");
+                });
 
         // Check if the message is displayed
         TestUtils.waitForDisplayedOrNotByXPath(
@@ -247,6 +268,8 @@ public class MeetUIUtils
             "try {" +
                 "var e = document.querySelector('" + selector + "');" +
                 "if (!e) { return false;}" +
+                "APP.debugLogs.getLogs().push(new Date().toISOString() + ' [MeetUIUtils] Clicking on: "
+                    + selector + "');" +
                 "e.click();" +
                 "return true;" +
                 "} catch (err) { return 'error: ' + err; }");
@@ -263,7 +286,8 @@ public class MeetUIUtils
             // there is no element, so its not visible, just continue
             // cause failOnMissing is false
             TestUtils.print("Element is missing:" + selector);
-        } else if (clickResult != null
+        }
+        else if (clickResult != null
             && !clickResult.equals(Boolean.TRUE))
         {
             TestUtils.print("Error clicking element:" + selector
@@ -369,7 +393,8 @@ public class MeetUIUtils
         try
         {
             filmstrip = driver.findElement(By.xpath(filmstripXPath));
-        } catch (NoSuchElementException ex)
+        }
+        catch (NoSuchElementException ex)
         {
             filmstrip = null;
         }
@@ -380,27 +405,6 @@ public class MeetUIUtils
 
             TestUtils.waitForElementNotPresentByXPath(
                     driver, filmstripXPath, 5);
-        }
-    }
-
-    /**
-     * Opens the settings panel, if not open.
-     *
-     * @param participant <tt>WebParticipant</tt> instance of the participant
-     * for whom we'll try to open the settings panel.
-     * @throws TimeoutException if we fail to open the settings panel.
-     */
-    public static void displaySettingsPanel(WebParticipant participant)
-    {
-        WebDriver driver = participant.getDriver();
-        String settingsXPath = "//div[@id='settings_container']";
-        WebElement settings = driver.findElement(By.xpath(settingsXPath));
-        if (!settings.isDisplayed())
-        {
-            participant.getToolbar().clickSettingsButton();
-
-            TestUtils.waitForDisplayedElementByXPath(
-                driver, settingsXPath, 5);
         }
     }
 
@@ -416,14 +420,11 @@ public class MeetUIUtils
      *               checking the status of audio muted icon.
      * @param isMuted if {@code true}, the method will assert the presence of
      * the "mute" icon; otherwise, it will assert its absence.
-     * @param isVideo if {@code true} the icon for "video mute" will be checked;
-     * otherwise, the "audio mute" icon will be checked.
      */
     public static void assertMuteIconIsDisplayed(
             WebDriver observer,
             WebDriver testee,
             boolean isMuted,
-            boolean isVideo,
             String name)
     {
         String id;
@@ -438,12 +439,10 @@ public class MeetUIUtils
         }
 
         String mutedIconXPath
-            = "//span[@id='%s']//span[contains(@class, '%sMuted')]"
+            = "//span[@id='%s']//span[contains(@id, '%sMuted')]"
                 + "//*[local-name() = 'svg' and @id = '%s-disabled']";
 
-        mutedIconXPath = isVideo ?
-            String.format(mutedIconXPath, id, "video", "camera")
-            : String.format(mutedIconXPath, id, "audio", "mic");
+        mutedIconXPath = String.format(mutedIconXPath, id, "audio", "mic");
 
         try
         {
@@ -490,7 +489,6 @@ public class MeetUIUtils
             observer,
             testee,
             muted,
-            false, //audio
             testeeName);
 
         // The code below check verifies audio muted status by checking the
@@ -581,10 +579,27 @@ public class MeetUIUtils
     public static void assertAvatarDisplayed(
             WebDriver driver, String endpointId)
     {
+        assertAvatarDisplayed(driver, endpointId, false);
+    }
+
+    /**
+     * Makes sure that a user's avatar is displayed, and that the user's video
+     * is not displayed. Allows for the these conditions to not hold
+     * immediately, but within a time interval of 5 seconds.
+     * @param driver instance of <tt>WebDriver</tt> on which we'll perform
+     * the verification.
+     * @param endpointId the resource part of MUC JID which identifies user's
+     * video thumbnail.
+     */
+    public static void assertAvatarDisplayed(
+            WebDriver driver, String endpointId, boolean defaultAvatar)
+    {
+        String xpath = defaultAvatar
+            ? MeetUIUtils.getDefaultAvatarXpathForParticipant(endpointId)
+            : MeetUIUtils.getAvatarXpathForParticipant(endpointId);
         // Avatar image
         TestUtils.waitForDisplayedElementByXPath(
-            driver, "//span[@id='participant_" + endpointId + "']" +
-                    "//img[contains(@class,'userAvatar')]",
+                driver, xpath,
             5);
 
         // User's video if available should be hidden, the element is missing
@@ -614,8 +629,53 @@ public class MeetUIUtils
         TestUtils.waitForDisplayedElementByXPath(
             driver,
             "//span[@id='participant_" + endpointId + "']" +
-                "//span[@class='displayname']",
+                "//span[starts-with(@class, 'displayname')]",
             5);
+    }
+
+    /**
+     * Helper for formatting the string to be used as a CSS selector for
+     * an accessibility label.
+     *
+     * @param accessibilityLabel The accessibility label to be used to search
+     * for a WebElement on the page.
+     * @return String intended to be used with By#cssSelector.
+     */
+    public static String getAccessibilityCSSSelector(String accessibilityLabel)
+    {
+        return String.format("[aria-label^=\"%s\"]", accessibilityLabel);
+    }
+
+    /**
+     * Helper for formatting the string to be used as a CSS selector for
+     * a test id.
+     *
+     * @param testId The test id to be used to search
+     * for a WebElement on the page.
+     * @return String intended to be used with By#cssSelector.
+     */
+    public static String getTestIdCSSSelector(String testId)
+    {
+        return String.format("[data-testid=\"%s\"]", testId);
+    }
+
+    /**
+     * Retrieves a remote participant display name.
+     *
+     * @param driver The driver where to check for the display name.
+     * @param remoteParticipantEndpointId The participant id which display name to be returned.
+     * @return The current display name of a participant.
+     */
+    public static String getRemoteDisplayName(WebDriver driver, String remoteParticipantEndpointId)
+    {
+        WebElement displayNameElem = driver.findElement(By.xpath(
+            "//span[@id='participant_" + remoteParticipantEndpointId + "']//span[@id='participant_" +
+                    remoteParticipantEndpointId + "_name']"));
+        Actions action = new Actions(driver);
+        action.moveToElement(displayNameElem);
+        action.build().perform();
+
+        return displayNameElem.getText();
     }
 
     /**
@@ -655,7 +715,7 @@ public class MeetUIUtils
     {
         TestUtils.waitForNotDisplayedElementByXPath(
             driver,
-            "//span[@id='localVideoContainer']//img[contains(@class,'userAvatar')]",
+            MeetUIUtils.getAvatarXpathForLocal(),
             5);
         TestUtils.waitForDisplayedElementByXPath(
             driver, "//span[@id='localVideoWrapper']//video", 5);
@@ -671,10 +731,26 @@ public class MeetUIUtils
     {
         TestUtils.waitForDisplayedElementByXPath(
             driver,
-            "//span[@id='localVideoContainer']//img[contains(@class,'userAvatar')]",
+            MeetUIUtils.getAvatarXpathForLocal(),
             5);
         TestUtils.waitForElementNotPresentOrNotDisplayedByXPath(
             driver, "//span[@id='localVideoWrapper']//video", 5);
+    }
+
+    /**
+     * Makes sure that the default avatar is displayed in the local thumbnail and that
+     * the video is not displayed.
+     * @param driver the instance of <tt>WebDriver</tt> on which we'll
+     * perform the verification.
+     */
+    public static void assertLocalThumbnailShowsDefaultAvatar(WebDriver driver)
+    {
+        TestUtils.waitForDisplayedElementByXPath(
+                driver,
+                MeetUIUtils.getDefaultAvatarXpathForLocal(),
+                5);
+        TestUtils.waitForElementNotPresentOrNotDisplayedByXPath(
+                driver, "//span[@id='localVideoWrapper']//video", 5);
     }
 
     /**
@@ -728,7 +804,7 @@ public class MeetUIUtils
     public static List<WebElement> getThumbnails(WebDriver participant)
     {
         return participant.findElements(By.xpath(
-            "//div[@id='remoteVideos']/span[contains(@class,'videocontainer')]"));
+            "//div[@id='remoteVideos']//span[contains(@class,'videocontainer')]"));
     }
 
     /**
@@ -760,7 +836,8 @@ public class MeetUIUtils
         final String expectedJid =
             MeetUtils.getResourceJid(testee);
 
-        try {
+        try
+        {
             TestUtils.waitForCondition(
                 observer,
                 5,
@@ -816,12 +893,7 @@ public class MeetUIUtils
     static public void selectRemoteVideo(WebDriver driver,
                                          String endpointId)
     {
-        String remoteThumbXpath
-            = "//span[starts-with(@id, 'participant_" + endpointId + "') "
-                + " and contains(@class,'videocontainer')]";
-
-        String remoteThumbVideoXpath
-            = remoteThumbXpath + "//video[starts-with(@id, 'remoteVideo_')]";
+        String remoteThumbXpath = String.format(REMOTE_THUMB_BY_ENDPOINT_ID_TMPL, endpointId);
 
         WebElement remoteThumbnail
             = TestUtils.waitForElementByXPath(
@@ -830,6 +902,21 @@ public class MeetUIUtils
 
         // click on remote
         remoteThumbnail.click();
+
+        waitForLargeVideoSwitchToEndpoint(driver, endpointId);
+    }
+
+    /**
+     * Waits for large video to switch to video for the endpoint id.
+     * @param driver the <tt>WebDriver</tt> instance on which the wait will
+     * be performed.
+     * @param endpointId the <tt>WebDriver</tt> instance which belongs to
+     * the participant that is to be displayed on "the large video".
+     */
+    static public void waitForLargeVideoSwitchToEndpoint(WebDriver driver, String endpointId)
+    {
+        String remoteThumbVideoXpath
+            = String.format(REMOTE_THUMB_BY_ENDPOINT_ID_TMPL, endpointId) + "//video[starts-with(@id, 'remoteVideo_')]";
 
         WebElement remoteThumbnailVideo
             = TestUtils.waitForElementByXPath(
@@ -864,11 +951,11 @@ public class MeetUIUtils
      * @param expectedVideoSrc a string which identifies the video stream
      * (the source set on HTML5 video element to attach WebRTC media stream).
      */
-    static private void waitForLargeVideoSwitch(
+    public static void waitForLargeVideoSwitch(
         WebDriver driver,
         final String expectedVideoSrc)
     {
-        new WebDriverWait(driver, 3)
+        new WebDriverWait(driver, Duration.ofSeconds(3))
             .withMessage(
                     "Failed to switch the large video at: "
                         + MeetUtils.getResourceJid(driver)
@@ -911,6 +998,93 @@ public class MeetUIUtils
         // Check "connection lost" icon
         TestUtils.waitForDisplayedOrNotByXPath(
                 driver, connectionLostXpath, 2, !isConnected);
+    }
+
+    /**
+     * Checks whether the remote participant's media connection status is ninja.
+     *
+     * @param driver the <tt>WebDriver</tt> instance where the check will be
+     * performed.
+     * @param endpointId the endpoint ID of the participant whose connection
+     * status will be checked.
+     * @return <tt>true</tt> if the indicator is ninja.
+     */
+    public static boolean hasNinjaUserConnStatusIndication(WebDriver driver, String endpointId)
+    {
+        assertNotNull(endpointId);
+
+        // Check "connection ninja" icon
+        return driver.findElements(
+            By.xpath("//span[@id='participant_" + endpointId + "']//span[@class='connection_ninja']"))
+                .size() > 0;
+    }
+
+    /**
+     * Waits for ninja icon to appear in remote videos.
+     * @param driver the <tt>WebDriver</tt> instance where the check will be
+     * performed.
+     */
+    public static void waitForNinjaIcon(WebDriver driver)
+    {
+        TestUtils.waitForElementByXPath(driver,
+            "//span[contains(@class,'videocontainer')]//span[contains(@class,'connection_ninja')]", 5);
+    }
+
+    /**
+     * Waits for ninja icon to appear in endpoint's remote videos.
+     * @param endpointId the endpoint ID of the participant whose connection
+     * status will be checked.
+     * @param driver the <tt>WebDriver</tt> instance where the check will be
+     * performed.
+     */
+    public static void waitForNinjaIcon(WebDriver driver, String endpointId)
+    {
+        TestUtils.waitForElementByXPath(driver,
+            "//span[@id='participant_" + endpointId + "']//span[@class='connection_ninja']", 15);
+    }
+
+    /**
+     * Waits for dominant speaker icon to appear in remote video of a participant.
+     * @param driver the <tt>WebDriver</tt> instance where the check will be
+     * performed.
+     * @param endpointId the endpoint ID of the participant whose dominant speaker icon
+     * status will be checked.
+     */
+    public static void waitForDominantSpeaker(WebDriver driver, String endpointId)
+    {
+        TestUtils.waitForElementByXPath(driver,
+            "//span[@id='participant_" + endpointId + "' and contains(@class, 'dominant-speaker')]", 5);
+    }
+
+    /**
+     * Waits for remote video state - receiving or not receive for a participant.
+     * @param driver the <tt>WebDriver</tt> instance where the check will be
+     * performed.
+     * @param endpointId the endpoint ID of the participant which video will be checked.
+     */
+    public static void waitForRemoteVideo(WebDriver driver, String endpointId, boolean received)
+    {
+        TestUtils.waitForBoolean(driver,
+            "return " + (received ? "" : "!" ) +"JitsiMeetJS.app.testing.isRemoteVideoReceived('" + endpointId + "');",
+            10);
+
+        // Wait for the remote video to be rendered
+        TestUtils.waitForCondition(
+            driver,
+            10,
+            (ExpectedCondition<Boolean>) d ->
+            {
+                WebElement videoElement
+                    = driver.findElement(By.xpath("//span[@id='participant_" + endpointId + "']"));
+
+                if (videoElement == null)
+                {
+                    return false;
+                }
+                boolean currentDisplay = videoElement.getAttribute("class").contains("display-video");
+
+                return currentDisplay == received;
+            });
     }
 
     /**
@@ -1025,17 +1199,11 @@ public class MeetUIUtils
         participant.getToolbar().clickVideoMuteButton();
 
         // Check if local video muted icon appears on local thumbnail
-        assertMuteIconIsDisplayed(
-            driver, driver, true, true, participant.getName());
+        participant.getParticipantsPane().assertIsParticipantVideoMuted(participant, true);
 
         if (participantCheck != null)
         {
-            MeetUIUtils.assertMuteIconIsDisplayed(
-                participantCheck.getDriver(),
-                driver,
-                true,
-                true,
-                "");
+            participantCheck.getParticipantsPane().assertIsParticipantVideoMuted(participant, true);
         }
     }
 
@@ -1051,26 +1219,90 @@ public class MeetUIUtils
     public static void unmuteVideoAndCheck(WebParticipant participant,
                                            WebParticipant participantCheck)
     {
-        WebDriver driver = participant.getDriver();
+        participant.getParticipantsPane().assertIsParticipantVideoMuted(participant, true);
 
-        // Make sure that there is the video mute button
-        participant.getToolbar().waitForVideoMuteButtonDisplay();
+        // Make sure that there is the video unmute button
+        participant.getToolbar().waitForVideoUnmuteButtonDisplay();
 
-        // Mute participant's video
-        participant.getToolbar().clickVideoMuteButton();
+        // Unmute participant's video
+        participant.getToolbar().clickVideoUnmuteButton();
 
         // Check if local video muted icon disappeared
+        participant.getParticipantsPane().assertIsParticipantVideoMuted(participant, false);
+
+        if (participantCheck != null)
+        {
+            participantCheck.getParticipantsPane().assertIsParticipantVideoMuted(participant, false);
+        }
+    }
+
+    /**
+     * Unmute <tt>participant</tt>'s audio, checks if the local UI has been
+     * updated accordingly and then does the verification from
+     * the <tt>participantCheck</tt> perspective.
+     * @param participant the {@link WebParticipant} of the participant to be
+     * "audio unmuted"
+     * @param participantCheck the {@link WebParticipant} of the participant
+     * which observes and checks if the audio has been unmuted correctly.
+     */
+    public static void unmuteAudioAndCheck(WebParticipant participant,
+                                           WebParticipant participantCheck)
+    {
+        participant.getNotifications().closeAskToUnmuteNotification();
+
+        WebDriver driver = participant.getDriver();
+
+        // Make sure that there is the audio unmute button
+        participant.getToolbar().waitForAudioUnmuteButtonDisplay();
+
+        // Unmute participant's audio
+        participant.getToolbar().clickAudioUnmuteButton();
+
+        // Check local audio has no muted icon
         assertMuteIconIsDisplayed(
-            driver, driver, false, true, participant.getName());
+                driver, driver, false, participant.getName());
 
         if (participantCheck != null)
         {
             MeetUIUtils.assertMuteIconIsDisplayed(
-                participantCheck.getDriver(),
-                driver,
-                false,
-                true,
-                "");
+                    participantCheck.getDriver(),
+                    driver,
+                    false,
+                    "");
+        }
+    }
+
+    /**
+     * Mute <tt>participant</tt>'s audio, checks if the local UI has been
+     * updated accordingly and then does the verification from
+     * the <tt>participantCheck</tt> perspective.
+     * @param participant the {@link WebParticipant} of the participant to be
+     * "audio muted"
+     * @param participantCheck the {@link WebParticipant} of the participant
+     * which observes and checks if the audio has been muted correctly.
+     */
+    public static void muteAudioAndCheck(WebParticipant participant,
+                                           WebParticipant participantCheck)
+    {
+        WebDriver driver = participant.getDriver();
+
+        // Make sure that there is the audio mute button
+        participant.getToolbar().waitForAudioMuteButtonDisplay();
+
+        // Mute participant's audio
+        participant.getToolbar().clickAudioMuteButton();
+
+        // Check local audio muted icon state
+        assertMuteIconIsDisplayed(
+                driver, driver, true, participant.getName());
+
+        if (participantCheck != null)
+        {
+            MeetUIUtils.assertMuteIconIsDisplayed(
+                    participantCheck.getDriver(),
+                    driver,
+                    true,
+                    "");
         }
     }
 
@@ -1087,7 +1319,7 @@ public class MeetUIUtils
     {
         TestUtils.waitForCondition(
             participant.getDriver(),
-            5,
+            10,
             (ExpectedCondition<Boolean>) d -> {
                 WebDriver driver = participant.getDriver();
                 WebElement appRoot
@@ -1097,5 +1329,43 @@ public class MeetUIUtils
 
                 return currentDisplay == isDisplayed;
             });
+    }
+
+    /**
+     * The xpath for participant avatar.
+     * @param endpointId the endpoint Id.
+     * @return the xpath.
+     */
+    public static String getAvatarXpathForParticipant(String endpointId)
+    {
+        return String.format(AVATAR_XPATH_TMPL, "participant_" + endpointId);
+    }
+
+    /**
+     * The xpath for the default participant avatar.
+     * @param endpointId the endpoint Id.
+     * @return the xpath.
+     */
+    public static String getDefaultAvatarXpathForParticipant(String endpointId)
+    {
+        return String.format(DEFAULT_AVATAR_XPATH_TMPL, "participant_" + endpointId);
+    }
+
+    /**
+     * The xpath for the local participant avatar.
+     * @return the xpath.
+     */
+    public static String getAvatarXpathForLocal()
+    {
+        return String.format(AVATAR_XPATH_TMPL, "localVideoContainer");
+    }
+
+    /**
+     * The xpath for the local participant avatar.
+     * @return the xpath.
+     */
+    public static String getDefaultAvatarXpathForLocal()
+    {
+        return String.format(DEFAULT_AVATAR_XPATH_TMPL, "localVideoContainer");
     }
 }

@@ -15,6 +15,7 @@
  */
 package org.jitsi.meet.test.base;
 
+import com.google.gson.*;
 import org.apache.commons.lang3.*;
 
 import java.net.*;
@@ -42,18 +43,25 @@ public class JitsiMeetUrl
 
     /**
      * In the example URL:
+     * "https://server.com/room1?login=true#config.debug=true" it's
+     * "login=true". Note that the "?" sign is not stored in the field, but
+     * added when the URL string is being constructed. At the same time any
+     * sub parameters should be joined with the "&" sign when passed to
+     * {@link #addRoomParameter(String, String)}. For convenience
+     */
+    private Map<String, String> queryParams = new HashMap<>();
+
+    /**
+     * In the example URL:
      * "https://server.com/room1?login=true#config.debug=true" it's "room1".
      */
     private String roomName;
 
     /**
      * In the example URL:
-     * "https://server.com/room1?login=true#config.debug=true"
-     * it's "login=true". Note that "?" sign is added automatically when the URL
-     * string is being constructed, but at the same time any sub parameters
-     * should be joined with the "&" sign.
+     * "https://server.com/tenant1/room1?login=true#config.debug=true" it's "tenant1".
      */
-    private String roomParameters;
+    private String tenantName;
 
     /**
      * In the example URL:
@@ -164,6 +172,56 @@ public class JitsiMeetUrl
     }
 
     /**
+     * Returns the fragment params as json.
+     * @return fragment params.
+     */
+    public JsonObject getFragmentParamsAsJson()
+    {
+        JsonObject params = new JsonObject();
+
+        // init config and interfaceConfig
+        JsonObject config = new JsonObject();
+        JsonObject interfaceConfig = new JsonObject();
+        params.add("config", config);
+        params.add("interfaceConfig", interfaceConfig);
+
+        for (Map.Entry<String, String> entry : fragmentParams.entrySet())
+        {
+            String key = entry.getKey();
+            JsonObject currentObj;
+            String newKey;
+
+            if (key.startsWith("config."))
+            {
+                currentObj = config;
+                newKey = key.substring("config.".length());
+            }
+            else if (key.startsWith("interfaceConfig."))
+            {
+                currentObj = interfaceConfig;
+                newKey = key.substring("interfaceConfig.".length());
+            }
+            else
+            {
+                currentObj = params;
+                newKey = key;
+            }
+
+            String value = entry.getValue();
+            if (value.equalsIgnoreCase("true") || value.equalsIgnoreCase("false"))
+            {
+                currentObj.addProperty(newKey, Boolean.parseBoolean(value));
+            }
+            else
+            {
+                currentObj.addProperty(newKey, value);
+            }
+        }
+
+        return params;
+    }
+
+    /**
      * Overriding this method will make a field-to-field copy of the URL.
      *
      * @return a field-to-field copy of this instance.
@@ -232,9 +290,28 @@ public class JitsiMeetUrl
     /**
      * @return obtains {@link #roomParameters} part of the conference URL.
      */
-    public String getRoomParameters()
+    private String getRoomParameters()
     {
-        return roomParameters;
+        StringBuilder paramBuilder = new StringBuilder();
+        boolean firstValue = true;
+
+        for (Map.Entry<String, String> entry : queryParams.entrySet())
+        {
+            if (firstValue)
+            {
+                firstValue = false;
+            }
+            else
+            {
+                paramBuilder.append("&");
+            }
+
+            paramBuilder.append(entry.getKey());
+            paramBuilder.append("=");
+            paramBuilder.append(entry.getValue());
+        }
+
+        return paramBuilder.toString();
     }
 
     /**
@@ -248,7 +325,9 @@ public class JitsiMeetUrl
     /**
      * Sets the {@link #roomName} part of the conference URL.
      *
-     * @param roomName a room name without any special characters.
+     * @param roomName a room name. Note that the provided string is not going to be URL-encoded, it's simply going to
+     * be appended to the URL string as is.
+     *
      * @return a reference to this object.
      */
     public JitsiMeetUrl setRoomName(String roomName)
@@ -258,16 +337,44 @@ public class JitsiMeetUrl
     }
 
     /**
-     * Sets the {@link #roomParameters} part of the conference URL.
+     * Sets the {@link #tenantName} part of the conference URL.
      *
-     * @param roomParameters the conference room parameters without "?" sign at
-     * the beginning, but with "&" between each of the params which are part of
-     * a single string passed here as an argument.
+     * @param tenantName a tenant name. Note that the provided string is not going to be URL-encoded, it's simply going
+     * to be appended to the URL string as is.
+     *
      * @return a reference to this object.
      */
-    public JitsiMeetUrl setRoomParameters(String roomParameters)
+    public JitsiMeetUrl setTenantName(String tenantName)
     {
-        this.roomParameters = roomParameters;
+        this.tenantName = tenantName;
+        return this;
+    }
+
+    /**
+     * Sets the {@link #roomParameters} part of the conference URL.
+     *
+     * @param paramKey the query parameter key name
+     * @param paramValue the value to assign to the query parameter key
+     * @return a reference to this object.
+     */
+    public JitsiMeetUrl addRoomParameter(String paramKey, String paramValue)
+    {
+        this.queryParams.put(paramKey, paramValue);
+
+        return this;
+    }
+
+    /**
+     * Sets the {@link #fragmentParameters} part of the conference URL.
+     *
+     * @param paramKey the fragment parameter key name
+     * @param paramValue the value to assign to the framgent parameter key
+     * @return a reference to this object.
+     */
+    public JitsiMeetUrl addFragmentParam(String paramKey, String paramValue)
+    {
+        this.fragmentParams.put(paramKey, paramValue);
+
         return this;
     }
 
@@ -298,8 +405,16 @@ public class JitsiMeetUrl
     @Override
     public String toString()
     {
-        String url = serverUrl + "/" + roomName;
+        String url = serverUrl;
 
+        if (StringUtils.isNotBlank(tenantName))
+        {
+            url += "/" + tenantName;
+        }
+
+        url += "/" + roomName;
+
+        String roomParameters = this.getRoomParameters();
         if (StringUtils.isNotBlank(roomParameters))
         {
             url += "?" + roomParameters;
@@ -321,7 +436,8 @@ public class JitsiMeetUrl
 
             urlBuilder.append(entry.getKey());
             urlBuilder.append("=");
-            urlBuilder.append(entry.getValue());
+            // make sure we add a valid json param
+            urlBuilder.append(JsonParser.parseString(entry.getValue()).toString());
         }
 
         return urlBuilder.toString();

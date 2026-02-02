@@ -21,6 +21,7 @@ import org.testng.annotations.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.stream.*;
+import org.apache.commons.lang3.*;
 
 import static org.jitsi.meet.test.util.TestUtils.*;
 
@@ -93,12 +94,22 @@ public abstract class AbstractBaseTest<P extends Participant>
     private Boolean skipped;
 
     /**
+     * The name of the property which controls the default jwt token
+     * used in tests
+     */
+    public static final String TOKEN_PNAME = "org.jitsi.token";
+
+    public static String generateRandomRoomName()
+    {
+        return "jitsimeettorture" + ((int)(Math.random()*1000000000));
+    }
+
+    /**
      * Default.
      */
     protected AbstractBaseTest()
     {
-        currentRoomName
-            = "torture" + String.valueOf((int)(Math.random()*1000000));
+        currentRoomName = generateRandomRoomName();
         participants = null;
     }
 
@@ -166,16 +177,15 @@ public abstract class AbstractBaseTest<P extends Participant>
         // See if this test should be skipped.
         this.skipped = checkForSkip(config);
 
+        String className = this.getClass().getSimpleName();
+
         if (skipped)
         {
-            // FIXME duplication of this.getClass().getSimpleName()
-            // FIXME formatting: there's still space left no need to break line
-            throw new SkipException(
-                    "skips-" + this.getClass().getSimpleName());
+            throw new SkipException("skips-" + className);
         }
 
         print(
-            "---=== Testing " + getClass().getSimpleName() + " ===---");
+            "---=== Testing " + className + " ===---");
 
         participants = createParticipantHelper(config);
 
@@ -184,6 +194,8 @@ public abstract class AbstractBaseTest<P extends Participant>
         // if this one fails, the failure will be registered in the
         // FailureListener to gather information and it will call
         // the cleanupClass() to clean up any leftovers
+        // FIXME if setupClass throws a SkipException a browser instance
+        //  is left behind if created in setup and @AfterClass is never called
         setupClass();
     }
 
@@ -224,9 +236,7 @@ public abstract class AbstractBaseTest<P extends Participant>
     }
 
     /**
-     * Return new {@link JitsiMeetUrl} instance which has only
-     * {@link JitsiMeetUrl#serverUrl} field initialized with the value from
-     * {@link ParticipantOptions#JITSI_MEET_URL_PROP} system property.
+     * Return new {@link JitsiMeetUrl} instance.
      *
      * @return a new instance of {@link JitsiMeetUrl}.
      */
@@ -366,7 +376,10 @@ public abstract class AbstractBaseTest<P extends Participant>
     @AfterClass
     public void cleanupClass()
     {
-        this.participants.cleanup();
+        if (this.participants != null)
+        {
+            this.participants.cleanup();
+        }
     }
 
     @BeforeMethod

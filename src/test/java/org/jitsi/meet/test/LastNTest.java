@@ -15,15 +15,11 @@
  */
 package org.jitsi.meet.test;
 
+import org.jitsi.meet.test.base.*;
 import org.jitsi.meet.test.util.*;
 import org.jitsi.meet.test.web.*;
-
 import org.openqa.selenium.*;
 import org.testng.annotations.*;
-
-import java.util.*;
-
-import static org.testng.Assert.*;
 
 /**
  * The tests for LastN feature.
@@ -38,93 +34,64 @@ public class LastNTest
     @Test
     public void testLastN()
     {
-        ensureThreeParticipants(
-            getJitsiMeetUrl().appendConfig(
-                "config.startAudioMuted=0&config.channelLastN=1"),
-            null, null);
+        hangUpAllParticipants();
 
-        WebDriver driver1 = getParticipant1().getDriver();
-        WebDriver driver2 = getParticipant2().getDriver();
-        WebDriver driver3 = getParticipant3().getDriver();
+        JitsiMeetUrl meetUrl1 = getJitsiMeetUrl()
+            .appendConfig("config.startWithAudioMuted=true")
+            .appendConfig("config.startWithVideoMuted=true")
+            .appendConfig("config.channelLastN=1");
+        JitsiMeetUrl meetUrl2 = meetUrl1.copy();
+        JitsiMeetUrl meetUrl3 = getJitsiMeetUrl()
+            .appendConfig("config.channelLastN=1");
+        JitsiMeetUrl meetUrl4 = meetUrl3.copy();
 
-        assertEquals(
-            MeetUIUtils.getThumbnails(driver1).size(),
-            3,
-            "number of thumbnails");
-        assertEquals(
-            MeetUIUtils.getVisibleThumbnails(driver1).size(),
-            2,
-            "number of visible thumbnails");
+        ensureOneParticipant(meetUrl1);
+        WebParticipant participant1 = getParticipant1();
+        WebDriver driver1 = participant1.getDriver();
 
-        getParticipant2().getFilmstrip()
-            .assertAudioMuteIcon(getParticipant1(), true);
-        getParticipant1().getFilmstrip()
-            .assertAudioMuteIcon(getParticipant2(), true);
-        getParticipant1().getFilmstrip()
-            .assertAudioMuteIcon(getParticipant3(), true);
+        WebParticipant participant2 = joinSecondParticipant(meetUrl2);
 
-        // unmute participant1
-        MuteTest muteTest = new MuteTest(this);
-        muteTest.unmuteParticipant2AndCheck();
+        participant2.waitToJoinMUC();
+        participant2.waitForIceConnected();
 
-        // now participant2 should be active speaker
-        assertTrue(
-            MeetUIUtils.isActiveSpeaker(driver1, driver2),
-            "participant1 should see participant2 as the active speaker");
-        assertActiveSpeakerThumbIsVisible(driver1, driver2);
-        assertTrue(
-            MeetUIUtils.isActiveSpeaker(driver3, driver2),
-            "participant3 should see participant2 as the active speaker");
-        assertActiveSpeakerThumbIsVisible(driver3, driver2);
+        WebParticipant participant3 = joinThirdParticipant(meetUrl3, null);
+        participant3.waitToJoinMUC();
+        participant3.waitForIceConnected();
+        participant3.waitForSendReceiveData(true, false);
 
-        muteTest.muteParticipant2AndCheck();
+        String participant3EndpointId = participant3.getEndpointId();
+        MeetUIUtils.waitForRemoteVideo(driver1, participant3EndpointId, true);
 
-        // unmute participant3
-        muteTest.unmuteParticipant3AndCheck();
+        // Mute audio on participant3.
+        participant3.getToolbar().clickAudioMuteButton();
 
-        // now participant3 should be active speaker
-        assertTrue(
-            MeetUIUtils.isActiveSpeaker(driver1, driver3),
-            "participant1 should see participant3 as the active speaker");
-        assertActiveSpeakerThumbIsVisible(driver1, driver3);
-        assertTrue(
-            MeetUIUtils.isActiveSpeaker(driver2, driver3),
-            "participant2 should see participant3 as the active speaker");
-        assertActiveSpeakerThumbIsVisible(driver2, driver3);
-    }
+        WebParticipant participant4 = joinFourthParticipant(meetUrl4);
+        participant4.waitToJoinMUC();
+        participant4.waitForIceConnected();
+        participant4.waitForSendReceiveData(true, true);
+        String participant4EndpointId = participant4.getEndpointId();
 
-    /**
-     * Assert that observer has only 2 visible thumbnails, and the second one is
-     * testee's thumbnail.
-     */
-    private void assertActiveSpeakerThumbIsVisible(
-        WebDriver observer, WebDriver testee)
-    {
-        List<WebElement> thumbs = MeetUIUtils.getVisibleThumbnails(observer);
+        // Mute audio on p4 and unmute p3.
+        participant4.getToolbar().clickAudioMuteButton();
+        participant3.getToolbar().clickAudioUnmuteButton();
 
-        assertEquals(
-            thumbs.size(),
-            2,
-            "number of visible thumbnails");
+        // Check if p1 starts receiving video from p3 and p4 shows up as ninja.
+        MeetUIUtils.waitForNinjaIcon(driver1, participant4EndpointId);
+        MeetUIUtils.waitForRemoteVideo(driver1, participant3EndpointId, true);
 
-        // remove local thumbnail from the list
-        String localContainerId = "localVideoContainer";
-        thumbs.removeIf(
-            thumb -> localContainerId.equals(thumb.getAttribute("id")));
+        // At this point, mute video of p3 and others should be receiving p4's video.
+        MeetUIUtils.muteVideoAndCheck(participant3, participant1);
+        MeetUIUtils.waitForRemoteVideo(driver1, participant4EndpointId, true);
 
-        assertEquals(thumbs.size(), 1);
+        // Unmute p3's video and others should switch to receiving p3's video.
+        participant3.getToolbar().clickVideoUnmuteButton();
+        MeetUIUtils.waitForRemoteVideo(driver1, participant3EndpointId, true);
+        MeetUIUtils.waitForNinjaIcon(driver1, participant4EndpointId);
 
-        WebElement testeeThumb = thumbs.get(0);
-        String testeeJid = MeetUtils.getResourceJid(testee);
-        assertEquals(
-            testeeThumb.getAttribute("id"),
-            "participant_" + testeeJid,
-            "active speaker thumbnail id");
-    }
-
-    @Override
-    public boolean skipTestByDefault()
-    {
-        return true;
+        // Mute p3's audio and unmute p2's audio. Other endpoints should continue to receive video from p3
+        // even though p2 is the dominant speaker.
+        participant3.getToolbar().clickAudioMuteButton();
+        participant2.getToolbar().clickAudioUnmuteButton();
+        MeetUIUtils.waitForRemoteVideo(driver1, participant3EndpointId, true);
     }
 }

@@ -20,6 +20,7 @@ import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.*;
 import org.openqa.selenium.support.ui.*;
 
+import java.time.*;
 import java.util.*;
 
 import static org.testng.Assert.fail;
@@ -66,10 +67,28 @@ public class MeetUtils
             "&& config.hosts && config.hosts.muc)";
 
     /**
+     * The javascript code which returns {@code true} if iframe is disabled.
+     */
+    public static final String IFRAME_API_DISABLED_CHECK_SCRIPT =
+        "return config.disableIframeAPI == true;";
+
+    /**
      * The javascript code which returns {@code true} if etherpad is enabled.
      */
     public static final String ETHERPAD_ENABLED_CHECK_SCRIPT =
         "return config.etherpad_base !== undefined;";
+
+    /**
+     * The javascript code which returns {@code true} if reactions are enabled.
+     */
+    public static final String REACTIONS_ENABLED_CHECK_SCRIPT =
+        "return config.enableReactions === true;";
+
+    /**
+     * The javascript code which returns {@code true} if help button enabled.
+     */
+    public static final String HELP_ENABLED_CHECK_SCRIPT =
+        "return config.deploymentUrls && config.deploymentUrls.userDocumentationURL !== undefined;";
 
     /**
      * Returns the webrtc stats (in JSON format) of the specific participant
@@ -82,8 +101,9 @@ public class MeetUtils
     public static String getRtpStats(WebDriver driver, boolean useJVB)
     {
         String script = String.format(
-                "return APP.conference._room ? JSON.stringify("
-                + "APP.conference._room.%s.peerconnection.stats) : null",
+                "let pc;"
+                + "return APP.conference._room && (pc = APP.conference._room.%s) && pc.peerconnection ? JSON.stringify("
+                + "pc.peerconnection.stats) : null",
                 useJVB ? "jvbJingleSession" : "p2pJingleSession");
 
         return TestUtils.executeScriptAndReturnString(driver, script);
@@ -245,16 +265,22 @@ public class MeetUtils
             "catch (e) { console.warn(e); } " +
             "return state;";
 
-        Wait<WebDriver> wait = new WebDriverWait(driver, 10);
+        Wait<WebDriver> wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         try
         {
             wait.until(driverInstance -> {
-                try {
-                    return ((JavascriptExecutor) driverInstance)
-                        .executeScript(checkPageLoadScript)
-                        .equals("complete");
+                try
+                {
+                    return Objects.equals(((JavascriptExecutor) driverInstance)
+                        .executeScript(checkPageLoadScript),
+                        "complete");
                 }
-                catch (Exception e) {
+                catch (WebDriverException e)
+                {
+                    throw e;
+                }
+                catch (Exception e)
+                {
                     e.printStackTrace();
                     return false;
                 }
@@ -276,7 +302,7 @@ public class MeetUtils
         Map stats = (Map)((JavascriptExecutor) driver)
             .executeScript("return APP.conference.getStats();");
 
-        Map<String,Long> bitrate = (Map<String,Long>)stats.get("bitrate");
+        Map<String, Long> bitrate = (Map<String, Long>)stats.get("bitrate");
 
         if (bitrate != null)
         {
@@ -398,5 +424,36 @@ public class MeetUtils
     {
         return TestUtils.executeScriptAndReturnBoolean(
             driver, ETHERPAD_ENABLED_CHECK_SCRIPT);
+    }
+
+    /**
+     * Checks whether iframe API is disabled.
+     * @param driver the <tt>WebDriver</tt> running Jitsi-Meet.
+     * @return returns {@code true} if iframeAPI is disabled.
+     */
+    public static boolean iFrameAPIDisabled(WebDriver driver)
+    {
+        return TestUtils.executeScriptAndReturnBoolean(
+            driver, IFRAME_API_DISABLED_CHECK_SCRIPT);
+    }
+
+    /**
+     * Checks whether help is enabled.
+     * @param driver the <tt>WebDriver</tt> running Jitsi-Meet.
+     * @return returns {@code true} if help is enabled.
+     */
+    public static boolean isHelpEnabled(WebDriver driver)
+    {
+        return TestUtils.executeScriptAndReturnBoolean(driver, HELP_ENABLED_CHECK_SCRIPT);
+    }
+
+    /**
+     * Checks whether reactions are enabled.
+     * @param driver the <tt>WebDriver</tt> running Jitsi-Meet.
+     * @return returns {@code true} if reactions are enabled.
+     */
+    public static boolean areReactionsEnabled(WebDriver driver)
+    {
+        return TestUtils.executeScriptAndReturnBoolean(driver, REACTIONS_ENABLED_CHECK_SCRIPT);
     }
 }

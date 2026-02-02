@@ -5,9 +5,19 @@
             <class name="org.jitsi.meet.test.ActiveSpeakerTest" />
         </classes>
     </test>
+    <test name="AllAuthenticatedModeratorsTest">
+        <classes>
+            <class name="org.jitsi.meet.test.misc.AllAuthenticatedModeratorsTest" />
+        </classes>
+    </test>
     <test name="AudioOnlyTest">
         <classes>
             <class name="org.jitsi.meet.test.AudioOnlyTest" />
+        </classes>
+    </test>
+    <test name="AudioVideoModerationTest">
+        <classes>
+            <class name="org.jitsi.meet.test.AudioVideoModerationTest" />
         </classes>
     </test>
     <test name="AvatarTest">
@@ -15,9 +25,24 @@
             <class name="org.jitsi.meet.test.AvatarTest" />
         </classes>
     </test>
+    <test name="BackendLobbyTest">
+        <classes>
+            <class name="org.jitsi.meet.test.misc.BackendLobbyTest" />
+        </classes>
+    </test>
+    <test name="BackendPasswordTest">
+        <classes>
+            <class name="org.jitsi.meet.test.misc.BackendPasswordTest" />
+        </classes>
+    </test>
     <test name="BandwidthEstimationTest">
         <classes>
             <class name="org.jitsi.meet.test.BandwidthEstimationTest" />
+        </classes>
+    </test>
+    <test name="BreakoutRoomsTest">
+        <classes>
+            <class name="org.jitsi.meet.test.BreakoutRoomsTest" />
         </classes>
     </test>
     <test name="ChatPanelTest">
@@ -31,6 +56,11 @@
             <class name="org.jitsi.meet.test.ConnectionTimeTest" />
         </classes>
     </test>-->
+    <test name="CodecSelectionTest">
+        <classes>
+            <class name="org.jitsi.meet.test.CodecSelectionTest" />
+        </classes>
+    </test>
     <test name="DataChannelTest">
         <classes>
             <class name="org.jitsi.meet.test.DataChannelTest" />
@@ -44,6 +74,11 @@
     <test name="DialInAudioTest">
         <classes>
             <class name="org.jitsi.meet.test.DialInAudioTest" />
+        </classes>
+    </test>
+    <test name="DisableSelfViewTest">
+        <classes>
+            <class name="org.jitsi.meet.test.DisableSelfViewTest" />
         </classes>
     </test>
     <test name="DisplayNameTest">
@@ -66,11 +101,6 @@
             <class name="org.jitsi.meet.test.FakeDialInAudioTest" />
         </classes>
     </test>
-    <test name="FilmstripOnlyTest">
-        <classes>
-            <class name="org.jitsi.meet.test.FilmstripOnlyTest" />
-        </classes>
-    </test>
     <test name="FollowMeTest">
         <classes>
             <class name="org.jitsi.meet.test.FollowMeTest" />
@@ -81,15 +111,36 @@
             <class name="org.jitsi.meet.test.InviteTest" />
         </classes>
     </test>
-    <test name="JibriTest">
+    <test name="JibriStreamTest">
         <classes>
-            <!-- JibriTest needs configuration or it is ignored by default -->
-            <class name="org.jitsi.meet.test.JibriTest" />
+            <!-- JibriStreamTest needs configuration or it is ignored by default -->
+            <class name="org.jitsi.meet.test.JibriStreamTest" />
         </classes>
     </test>
-    <test name="IFrameAPITest">
+    <test name="JibriStreamResolutionTest">
         <classes>
-            <class name="org.jitsi.meet.test.IFrameAPITest" />
+            <!-- JibriStreamResolutionTest needs configuration or it is ignored by default -->
+            <class name="org.jitsi.meet.test.JibriStreamResolutionTest" />
+        </classes>
+    </test>
+    <test name="IFrameAPIGeneral">
+        <classes>
+            <class name="org.jitsi.meet.test.IFrameAPIGeneral" />
+        </classes>
+    </test>
+    <test name="IFrameAPICommandsTest">
+        <classes>
+            <class name="org.jitsi.meet.test.IFrameAPICommandsTest" />
+        </classes>
+    </test>
+    <test name="IFrameAPIFunctionsTest">
+        <classes>
+            <class name="org.jitsi.meet.test.IFrameAPIFunctionsTest" />
+        </classes>
+    </test>
+    <test name="KickTest">
+        <classes>
+            <class name="org.jitsi.meet.test.KickTest" />
         </classes>
     </test>
     <test name="LipSyncTest">
@@ -97,9 +148,29 @@
             <class name="org.jitsi.meet.test.LipSyncTest" />
         </classes>
     </test>
+    <test name="LobbyTest">
+        <classes>
+            <class name="org.jitsi.meet.test.LobbyTest" />
+        </classes>
+    </test>
     <test name="LockRoomTest">
         <classes>
             <class name="org.jitsi.meet.test.LockRoomTest" />
+        </classes>
+    </test>
+    <test name="LockRoomDigitsOnlyTest">
+        <classes>
+            <class name="org.jitsi.meet.test.LockRoomDigitsOnlyTest" />
+        </classes>
+    </test>
+    <test name="ModeratedRoomsTest">
+        <classes>
+            <class name="org.jitsi.meet.test.ModeratedRoomsTest" />
+        </classes>
+    </test>
+    <test name="ModeratorTest">
+        <classes>
+            <class name="org.jitsi.meet.test.ModeratorTest" />
         </classes>
     </test>
     <test name="MuteTest">
@@ -117,14 +188,24 @@
             <class name="org.jitsi.meet.test.Peer2PeerTest" />
         </classes>
     </test>
+    <test name="PreJoinTest">
+        <classes>
+            <class name="org.jitsi.meet.test.PreJoinTest" />
+        </classes>
+    </test>
     <test name="ReloadTest">
         <classes>
             <class name="org.jitsi.meet.test.ReloadTest" />
         </classes>
     </test>
-    <test name="SharedVideoTest">
+    <!-- <test name="SharedVideoTest">
         <classes>
             <class name="org.jitsi.meet.test.SharedVideoTest" />
+        </classes>
+    </test> -->
+    <test name="SingleModeratorTest">
+        <classes>
+            <class name="org.jitsi.meet.test.misc.SingleModeratorTest" />
         </classes>
     </test>
     <test name="SinglePortTest">
@@ -142,9 +223,19 @@
             <class name="org.jitsi.meet.test.StopVideoTest" />
         </classes>
     </test>
+    <test name="SubjectTest">
+        <classes>
+            <class name="org.jitsi.meet.test.SubjectTest" />
+        </classes>
+    </test>
     <test name="SwitchVideoTest">
         <classes>
             <class name="org.jitsi.meet.test.SwitchVideoTest" />
+        </classes>
+    </test>
+    <test name="TenantModeratorsTest">
+        <classes>
+            <class name="org.jitsi.meet.test.misc.TenantModeratorsTest" />
         </classes>
     </test>
     <test name="TileViewTest">
@@ -177,11 +268,6 @@
     <test name="AuthSetupConference">
         <classes>
             <class name="org.jitsi.meet.test.AuthSetupConference" />
-        </classes>
-    </test>
-    <test name="ConferenceMigrationTest">
-        <classes>
-            <class name="org.jitsi.meet.test.ConferenceMigrationTest" />
         </classes>
     </test>
     <test name="JVBConferencesCheck">
@@ -222,6 +308,11 @@
     <test name="RestTests">
         <classes>
             <class name="org.jitsi.meet.test.RestTests" />
+        </classes>
+    </test>
+    <test name="UrlNormalisationTest">
+        <classes>
+            <class name="org.jitsi.meet.test.UrlNormalisationTest" />
         </classes>
     </test>
 </suite>

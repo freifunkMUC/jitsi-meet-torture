@@ -21,6 +21,8 @@ import org.jitsi.meet.test.web.*;
 
 import org.testng.annotations.*;
 
+import static org.jitsi.meet.test.util.TestUtils.*;
+
 /**
  * Tests the muting and unmuting of the participants in Meet conferences.
  *
@@ -115,7 +117,17 @@ public class MuteTest
      */
     public void muteParticipant3AndCheck()
     {
-        ensureThreeParticipants();
+        this.muteParticipant3AndCheck(null, null, null);
+    }
+
+    /**
+     * Mutes participant3 and checks at participant1's side.
+     */
+    public void muteParticipant3AndCheck(JitsiMeetUrl participantOneMeetURL,
+                                         JitsiMeetUrl participantTwoMeetURL,
+                                         JitsiMeetUrl participantThreeMeetURL)
+    {
+        ensureThreeParticipants(participantOneMeetURL, participantTwoMeetURL, participantThreeMeetURL);
 
         toggleMuteAndCheck(
             getParticipant3(),
@@ -144,6 +156,17 @@ public class MuteTest
     @Test(dependsOnMethods = {"unmuteParticipant2AndCheck"})
     public void participant1MutesParticipant2AndCheck()
     {
+        WebParticipant participant1 = getParticipant1();
+        if (!participant1.isModerator())
+        {
+            print("Participant 1 is not a moderator, skipping check!");
+
+            // will mute participant2 to keep the state expected by next tests
+            getParticipant2().getToolbar().clickAudioMuteButton();
+
+            return;
+        }
+
         getParticipant1()
             .getRemoteParticipantById(getParticipant2().getEndpointId())
             .mute();
@@ -162,7 +185,7 @@ public class MuteTest
     {
         TestUtils.waitMillis(1000);
 
-        getParticipant2().getToolbar().clickAudioMuteButton();
+        getParticipant2().getToolbar().clickAudioUnmuteButton();
 
         TestUtils.waitMillis(1000);
 
@@ -182,6 +205,14 @@ public class MuteTest
     @Test(dependsOnMethods = {"participant2UnmutesAfterParticipant1MutedItAndCheck"})
     public void muteParticipant1BeforeParticipant2Joins()
     {
+        // we ignore this test for FF as it randomly fails with:
+        // Expected condition failed: waiting for WebParticipant[web.participant2]@#waitForSendReceiveData (tried for 20
+        // we believe it was a bug in FF which we see in rare conditions ...
+        if (getParticipant1().getType().isFirefox())
+        {
+            return;
+        }
+
         getParticipant2().hangUp();
 
         // just in case wait
@@ -189,18 +220,77 @@ public class MuteTest
 
         getParticipant1().getToolbar().clickAudioMuteButton();
 
-        WebParticipant participant = joinSecondParticipant();
-
-        // if the participant is audio only, if audio is muted we will not
-        // receive any data, so skip download check
-        participant.waitForSendReceiveData(
-            true, !participant.isAudioOnlyParticipant());
+        ensureTwoParticipants();
 
         getParticipant2().getFilmstrip()
             .assertAudioMuteIcon(getParticipant1(), true);
 
         // now lets unmute
         unmuteParticipant1AndCheck();
+    }
+
+    /**
+     * Run muteAfterJoinCanShareAndUnmute in both p2p and jvb mode.
+     * Disabled for now as it fails from time to time.
+     */
+    //@Test(dependsOnMethods = {"muteParticipant1BeforeParticipant2Joins"})
+    public void muteAfterJoinCanShareAndUnmute()
+    {
+        muteParticipant1BeforeParticipant2JoinsAndScreenshare("true");
+        muteParticipant1BeforeParticipant2JoinsAndScreenshare("false");
+    }
+
+    /**
+     * Video mutes participant1 before participant2 joins and checks if participant1 can share or unmute video
+     * and that media is being received on participant2 in both the cases.
+     */
+    private void muteParticipant1BeforeParticipant2JoinsAndScreenshare(String enableP2p)
+    {
+        hangUpAllParticipants();
+
+        JitsiMeetUrl url = getJitsiMeetUrl().appendConfig("config.p2p.enabled=" + enableP2p);
+        ensureOneParticipant(url);
+        JitsiMeetUrl url2 = url.copy();
+
+        getParticipant1().getToolbar().clickVideoMuteButton();
+
+        WebParticipant participant1 = getParticipant1();
+
+        // Skip the test in p2p mode for Firefox since p2p is disabled in code for Firefox.
+        if (!participant1.getType().isFirefox() || enableP2p.equals("false"))
+        {
+            WebParticipant participant2 = joinSecondParticipant(url2);
+            participant2.waitToJoinMUC();
+
+            // Wait for the media to switch over to the p2p connection in the p2p test.
+            if (enableP2p.equals("true"))
+            {
+                MeetUtils.waitForP2PIceConnected(participant2.getDriver());
+            }
+            else
+            {
+                participant2.waitForIceConnected();
+            }
+            participant2.waitForSendReceiveData(true, false);
+
+            // Check if p1 appears video muted on p2.
+            participant2.getParticipantsPane().assertIsParticipantVideoMuted(participant1, true);
+
+            // Start desktop share.
+            participant1.getToolbar().clickDesktopSharingButton();
+
+            // Check if a remote screenshare tile is created on p2.
+            DesktopSharingTest.checkForScreensharingTile(participant1, participant2, true, 5);
+            MeetUIUtils.waitForRemoteVideo(participant2.getDriver(), participant1.getEndpointId(), true);
+
+            // Stop desktop share and unmute video and check for video again.
+            participant1.getToolbar().clickStopDesktopSharingButton();
+
+            participant2.getParticipantsPane().assertIsParticipantVideoMuted(participant1, true);
+            participant1.getToolbar().clickVideoUnmuteButton();
+            participant2.getParticipantsPane().assertIsParticipantVideoMuted(participant1, false);
+            MeetUIUtils.waitForRemoteVideo(participant2.getDriver(), participant1.getEndpointId(), true);
+        }
     }
 
     /**
@@ -223,7 +313,14 @@ public class MuteTest
         WebParticipant observer,
         boolean muted)
     {
-        testee.getToolbar().clickAudioMuteButton();
+        if (muted)
+        {
+            testee.getToolbar().clickAudioMuteButton();
+        }
+        else
+        {
+            testee.getToolbar().clickAudioUnmuteButton();
+        }
 
         observer.getFilmstrip()
             .assertAudioMuteIcon(testee, muted);

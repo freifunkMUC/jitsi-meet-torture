@@ -19,7 +19,6 @@ import org.jitsi.meet.test.util.*;
 import org.jitsi.meet.test.web.*;
 
 import org.openqa.selenium.*;
-import org.openqa.selenium.support.ui.*;
 import org.testng.*;
 import org.testng.annotations.*;
 
@@ -62,6 +61,7 @@ public class ReloadTest
 
         if (hookScript == null || host == null)
         {
+            cleanupClass();
             throw new SkipException(
                 "no hook script or host has been specified");
         }
@@ -132,10 +132,8 @@ public class ReloadTest
     @Test(dependsOnMethods = { "testJicofoRestart" })
     public void participant1CheckVideoMuted()
     {
-        getParticipant1().getFilmstrip()
-            .assertVideoMuteIcon(getParticipant1(), true);
-        getParticipant2().getFilmstrip()
-            .assertVideoMuteIcon(getParticipant1(), true);
+        getParticipant1().getParticipantsPane().assertIsParticipantVideoMuted(getParticipant1(), true);
+        getParticipant2().getParticipantsPane().assertIsParticipantVideoMuted(getParticipant1(), true);
     }
     
     /**

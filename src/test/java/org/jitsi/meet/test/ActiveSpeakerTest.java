@@ -23,6 +23,7 @@ import org.openqa.selenium.support.ui.*;
 import org.testng.*;
 import org.testng.annotations.*;
 
+import java.time.*;
 import java.util.*;
 
 import static org.testng.Assert.*;
@@ -89,8 +90,8 @@ public class ActiveSpeakerTest
     {
         List<WebElement> dominantSpeakerIndicators =
             driver.findElements(By.xpath(
-                "//span[contains(@id,'dominantspeakerindicator')]"
-                ));
+                "//span[not(contains(@class, 'tile-view'))]//span[contains(@class,'dominant-speaker')]"
+            ));
 
         int speakers = 0;
         for (WebElement el : dominantSpeakerIndicators)
@@ -145,19 +146,16 @@ public class ActiveSpeakerTest
         final String speakerEndpoint = activeSpeaker.getEndpointId();
 
         // just a debug print to go in logs
-        activeSpeaker.executeScript(
-                "console.log('Unmuting in testActiveSpeaker');");
+        consolePrint(activeSpeaker, "Unmuting in testActiveSpeaker");
         // Unmute
-        activeSpeaker.getToolbar().clickAudioMuteButton();
+        activeSpeaker.getToolbar().clickAudioUnmuteButton();
 
         // just a debug print to go in logs
-        participant2.executeScript(
-                "console.log('Participant unmuted in testActiveSpeaker "
-                    + speakerEndpoint + "');");
+        consolePrint(participant2,
+            "Participant unmuted in testActiveSpeaker " + speakerEndpoint);
         // just a debug print to go in logs
-        participant3.executeScript(
-                "console.log('Participant unmuted in testActiveSpeaker "
-                    + speakerEndpoint + "');");
+        consolePrint(participant3,
+            "Participant unmuted in testActiveSpeaker " + speakerEndpoint);
         getParticipant2().getFilmstrip()
             .assertAudioMuteIcon(activeSpeaker, false);
 
@@ -165,7 +163,7 @@ public class ActiveSpeakerTest
         // perspective
         try
         {
-            new WebDriverWait(driver2, 10).until(
+            new WebDriverWait(driver2, Duration.ofSeconds(10)).until(
                 (ExpectedCondition<Boolean>) d -> speakerEndpoint.equals(
                     MeetUIUtils.getLargeVideoResource(d)));
         }
@@ -178,18 +176,15 @@ public class ActiveSpeakerTest
         }
 
         // just a debug print to go in logs
-        activeSpeaker.executeScript(
-                "console.log('Muting in testActiveSpeaker');");
+        consolePrint(activeSpeaker, "Muting in testActiveSpeaker");
         // Mute back again
         activeSpeaker.getToolbar().clickAudioMuteButton();
         // just a debug print to go in logs
-        participant2.executeScript(
-                "console.log('Participant muted in testActiveSpeaker "
-                    + speakerEndpoint + "');");
+        consolePrint(participant2,
+            "Participant muted in testActiveSpeaker " + speakerEndpoint);
         // just a debug print to go in logs
-        participant3.executeScript(
-                "console.log('Participant muted in testActiveSpeaker "
-                    + speakerEndpoint + "');");
+        consolePrint(participant3,
+            "Participant muted in testActiveSpeaker " + speakerEndpoint);
         participant2.getFilmstrip().assertAudioMuteIcon(activeSpeaker, true);
     }
 }

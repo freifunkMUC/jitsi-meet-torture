@@ -36,7 +36,7 @@ import java.util.logging.*;
  *
  * @author Pawel Domas
  */
-public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
+public class MobileParticipant extends Participant<AppiumDriver>
 {
     /**
      * The default config part of the {@link JitsiMeetUrl} for every mobile
@@ -73,7 +73,7 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
     /**
      * The Appium driver instance.
      */
-    private final AppiumDriver<MobileElement> driver;
+    private final AppiumDriver driver;
 
     /**
      * Initializes {@link MobileParticipant}.
@@ -87,7 +87,7 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
      * @param appBinaryFile - A full path to the app binary file which can be
      * used to install the app on the device.
      */
-    public MobileParticipant(AppiumDriver<MobileElement> driver,
+    public MobileParticipant(AppiumDriver driver,
                              String name,
                              ParticipantType type,
                              String appBundleId,
@@ -145,9 +145,9 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
         }
     }
 
-    private AndroidDriver<MobileElement> getAndroidDriver()
+    private AndroidDriver getAndroidDriver()
     {
-        return type.isAndroid() ? (AndroidDriver<MobileElement>) driver : null;
+        return type.isAndroid() ? (AndroidDriver) driver : null;
     }
 
     /**
@@ -168,7 +168,10 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
      *
      * @return <tt>null</tt>
      */
-    public Object getConfigValue(String key) { return null; }
+    public Object getConfigValue(String key)
+    {
+        return null;
+    }
 
     /**
      * {@inheritDoc}
@@ -256,7 +259,7 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
 
         toggleSwitch.click();
 
-        getAndroidDriver().pressKeyCode(AndroidKeyCode.BACK);
+        getAndroidDriver().pressKey(new KeyEvent(AndroidKey.BACK));
 
         logger.info("Overlay permissions granted !");
     }
@@ -276,7 +279,7 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
 
         WelcomePageView welcomePageView = new WelcomePageView(this);
 
-        MobileElement roomNameInput = welcomePageView.getRoomNameInput();
+        WebElement roomNameInput = welcomePageView.getRoomNameInput();
 
         roomNameInput.sendKeys(conferenceUrl.toString());
 
@@ -364,7 +367,7 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
     /**
      * {@inheritDoc}
      */
-    public AppiumDriver<MobileElement> getDriver()
+    public AppiumDriver getDriver()
     {
         return driver;
     }
@@ -378,9 +381,9 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
         if (removeAppIfInstalled())
         {
             Logger.getGlobal().log(Level.INFO, "Installing app...");
-            driver.installApp(appBinaryFile);
+            ((InteractsWithApps)driver).installApp(appBinaryFile);
             Logger.getGlobal().log(Level.INFO, "Launching app...");
-            driver.launchApp();
+            ((InteractsWithApps)driver).activateApp(appBundleId);
         }
     }
 
@@ -394,10 +397,10 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
     public boolean removeAppIfInstalled()
     {
         // FIXME driver.isAppInstalled does not work on iOS
-        if (type.isIOS() || driver.isAppInstalled(appBundleId))
+        if (type.isIOS() || ((InteractsWithApps)driver).isAppInstalled(appBundleId))
         {
             Logger.getGlobal().log(Level.INFO, "Removing app...");
-            driver.removeApp(appBundleId);
+            ((InteractsWithApps)driver).removeApp(appBundleId);
 
             return true;
         }
@@ -428,6 +431,24 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
     public boolean isInMuc()
     {
         return new TestConnectionInfo(this).isConferenceJoined();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isModerator()
+    {
+        return new TestConnectionInfo(this).isLocalParticipantModerator();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean hasGrantModerator()
+    {
+        return new TestConnectionInfo(this).isGrantModeratorAvailable();
     }
 
     @Override
@@ -486,7 +507,7 @@ public class MobileParticipant extends Participant<AppiumDriver<MobileElement>>
     }
 
     @Override
-    public List<RemoteParticipant<AppiumDriver<MobileElement>>>
+    public List<RemoteParticipant<AppiumDriver>>
         getRemoteParticipants()
     {
         throw new RuntimeException("Not implemented");

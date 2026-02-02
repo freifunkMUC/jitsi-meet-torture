@@ -136,10 +136,9 @@ public class FailureListener
     {
         // move all failed configurations to the failed tests set
         // in order to easily spot them in the html report
-        for(ITestResult r
-            : iTestContext.getFailedConfigurations().getAllResults())
+        for (ITestResult r : iTestContext.getFailedConfigurations().getAllResults())
         {
-            iTestContext.getFailedTests().addResult(r, r.getMethod());
+            iTestContext.getFailedTests().addResult(r);
         }
     }
 
@@ -209,7 +208,7 @@ public class FailureListener
         }
         catch(Throwable ex)
         {
-            ex.printStackTrace();
+            Logger.getGlobal().log(Level.SEVERE, "Failed to gather debug information for ", ex);
         }
     }
 
@@ -300,6 +299,8 @@ public class FailureListener
     {
         try
         {
+            Logger.getGlobal().info("get debug log for:" + participant.getName());
+
             String log = participant.getMeetDebugLog();
             if (log != null)
             {
@@ -324,11 +325,7 @@ public class FailureListener
         String fileNamePrefix,
         List<Participant<? extends WebDriver>> participants)
     {
-        participants
-            .forEach(
-                p -> saveMeetRTPStats(
-                    p,
-                    fileNamePrefix + "-rtpstats-" + p.getName() + ".json"));
+        participants.forEach(p -> saveMeetRTPStats(p, fileNamePrefix + "-rtpstats-" + p.getName() + ".json"));
     }
 
     /**
@@ -347,28 +344,37 @@ public class FailureListener
         }
         catch (Exception e)
         {
-            Logger.getGlobal()
-                .log(
-                    Level.SEVERE,
-                    "Failed to write rtp stats for " + participant.getName(),
-                    e);
+            TestUtils.print("Failed to write rtp stats for " + participant.getName() + " :" + e.getMessage());
         }
     }
 
     /**
      * Saves browser console logs.
      */
-    private void saveBrowserLogs(
-            String fileNamePrefix,
-            List<Participant<? extends WebDriver>> participants)
+    private void saveBrowserLogs(String fileNamePrefix, List<Participant<? extends WebDriver>> participants)
     {
-        participants
-            .forEach(
-                p -> saveBrowserLogs(
-                    p,
-                    fileNamePrefix,
-                    "-console-" + p.getName(),
-                    ".log"));
+        participants.forEach(p ->
+        {
+            saveBrowserLogs(fileNamePrefix, p);
+        });
+    }
+
+    /**
+     * Saves browser console logs for a participant.
+     * @param fileNamePrefix the file prefix.
+     * @param participant the participant which logs to save.
+     */
+    public static void saveBrowserLogs(String fileNamePrefix, Participant<? extends WebDriver> participant)
+    {
+        try
+        {
+            TestUtils.print("Saving browser logs for:" + participant.getName());
+            saveBrowserLogs(participant, fileNamePrefix, "-console-" + participant.getName(), ".log");
+        }
+        catch(Throwable e)
+        {
+            TestUtils.print("Error obtaining browser logs for " + participant.getName() + ": " + e.getMessage());
+        }
     }
 
     /**
@@ -404,37 +410,24 @@ public class FailureListener
     /**
      * Saves browser console logs.
      */
-    private void saveBrowserLogs(
-            Participant p, String fileNamePrefix,
-            String suffix, String extension)
+    private static void saveBrowserLogs(Participant p, String fileNamePrefix, String suffix, String extension)
+        throws Exception
     {
-        try
-        {
-            List logs = p.getBrowserLogs();
+        List logs = p.getBrowserLogs();
 
-            if (logs != null)
+        if (logs != null)
+        {
+            File outputFile = new File(outputLogsParentFolder, fileNamePrefix + suffix + "-driver" + extension);
+
+            try (BufferedWriter out = new BufferedWriter(new FileWriter(outputFile)))
             {
-                File outputFile
-                    = new File(
-                            outputLogsParentFolder,
-                            fileNamePrefix + suffix + "-driver" + extension);
-
-                try (BufferedWriter out
-                         = new BufferedWriter(
-                                new FileWriter(outputFile)))
+                for (Object e : logs)
                 {
-                    for (Object e : logs)
-                    {
-                        out.write(e.toString());
-                        out.newLine();
-                    }
-                    out.flush();
+                    out.write(e.toString());
+                    out.newLine();
                 }
+                out.flush();
             }
-        }
-        catch (IOException e)
-        {
-            e.printStackTrace();
         }
     }
 

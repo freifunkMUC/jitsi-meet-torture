@@ -15,7 +15,6 @@
  */
 package org.jitsi.meet.test;
 
-import org.jitsi.meet.test.base.*;
 import org.jitsi.meet.test.capture.*;
 import org.jitsi.meet.test.tasks.*;
 import org.jitsi.meet.test.util.*;
@@ -104,7 +103,7 @@ public class LipSyncTest
         // don't want to end up with silence being streamed
 
         // this file is required in order to run this test
-        ParticipantOptions options
+        WebParticipantOptions options
             = new WebParticipantOptions()
                 .setFakeStreamVideoFile("resources/fakeVideoStream.y4m")
                 .setFakeStreamAudioFile("resources/fakeAudioStream-lipsync.wav");
@@ -418,7 +417,7 @@ public class LipSyncTest
         private <T> int findSignalIdx(T[] series,
                                       Comparator<T> condition, int startIdx)
         {
-            for (int i = startIdx + 1; i + 1 < series.length;i++)
+            for (int i = startIdx + 1; i + 1 < series.length; i++)
             {
                 if (condition.compare(series[i-1], series[i]) > 0)
                 {

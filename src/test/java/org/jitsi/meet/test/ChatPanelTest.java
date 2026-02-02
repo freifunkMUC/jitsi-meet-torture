@@ -19,8 +19,6 @@ import org.jitsi.meet.test.pageobjects.web.*;
 import org.jitsi.meet.test.web.*;
 import org.testng.annotations.*;
 
-import static org.testng.Assert.*;
-
 /**
  * Checks that the chat panel can be opened and closed with a shortcut and
  * with the toolbar button.
@@ -58,12 +56,11 @@ public class ChatPanelTest
         ChatPanel chatPanel = participant.getChatPanel();
         Toolbar toolbar = participant.getToolbar();
 
-        assertFalse(
-            chatPanel.isOpen(),
-            "The chat panel should be initially closed");
+
+        chatPanel.assertClosed();
 
         // The chat panel should be open after clicking the button
-        toolbar.clickChatButton();
+        toolbar.clickOpenChatButton();
         chatPanel.assertOpen();
 
         // The chat panel should be closed after pressing the shortcut
@@ -75,7 +72,7 @@ public class ChatPanelTest
         chatPanel.assertOpen();
 
         // The chat panel should be closed after clicking the button
-        toolbar.clickChatButton();
+        toolbar.clickCloseChatButton();
         chatPanel.assertClosed();
     }
 }

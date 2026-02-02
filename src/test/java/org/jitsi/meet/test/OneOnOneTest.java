@@ -44,8 +44,8 @@ public class OneOnOneTest
      */
     private static final String ONE_ON_ONE_CONFIG_OVERRIDES
         = "config.disable1On1Mode=false"
-        + "&interfaceConfig.TOOLBAR_TIMEOUT=250"
-        + "&config.alwaysVisibleToolbar=false";
+        + "&config.toolbarConfig.timeout=500"
+        + "&config.toolbarConfig.alwaysVisible=false";
 
     /**
      * Tests remote videos in filmstrip do not display in a 1-on-1 call.
@@ -74,7 +74,8 @@ public class OneOnOneTest
      * two total participants.
      */
     @Test(dependsOnMethods = { "testFilmstripHiddenInOneOnOne" })
-    public void testFilmstripVisibleWithMoreThanTwo() {
+    public void testFilmstripVisibleWithMoreThanTwo()
+    {
         ensureThreeParticipants(
             null, null,
             getJitsiMeetUrl().appendConfig(ONE_ON_ONE_CONFIG_OVERRIDES));
@@ -148,7 +149,7 @@ public class OneOnOneTest
         Participant testee, boolean isDisplayed)
     {
         String filmstripRemoteVideosXpath
-            = "//div[@id='filmstripRemoteVideosContainer']";
+            = "//div[contains(@class, 'remote-videos')]/div";
 
         TestUtils.waitForDisplayedOrNotByXPath(
             testee.getDriver(),

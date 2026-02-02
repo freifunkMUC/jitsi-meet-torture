@@ -15,6 +15,8 @@
  */
 package org.jitsi.meet.test;
 
+import java.util.stream.*;
+
 import org.jitsi.meet.test.pageobjects.web.*;
 import org.jitsi.meet.test.util.*;
 import org.jitsi.meet.test.web.*;
@@ -71,11 +73,13 @@ public class FollowMeTest
     {
         WebParticipant participant2 = getParticipant2();
 
-        Boolean allModeratorsEnabled = (Boolean)(
-            participant2.executeScript(
-                "return !!interfaceConfig.DISABLE_FOCUS_INDICATOR;"));
+        Boolean allModeratorsEnabled = Stream
+            .of(getParticipant1(), participant2)
+            .allMatch(WebParticipant::isModerator);
+
         // if all are moderators skip this check
-        if (allModeratorsEnabled) {
+        if (allModeratorsEnabled)
+        {
             print("All moderators enabled, skipping check!");
             return;
         }
@@ -160,15 +164,19 @@ public class FollowMeTest
     {
         joinThirdParticipant();
 
+        // with three participants we default to tile view now, but it's decided a bit
+        // later than when the 3rd part. joins, so we need to wait for that.
+        MeetUIUtils.waitForTileViewDisplay(getParticipant1(), true);
+
+        getParticipant1().getToolbar().clickExitTileViewButton();
+
+        getAllParticipants().forEach(participant ->
+            MeetUIUtils.waitForTileViewDisplay(participant, false));
+
         getParticipant1().getToolbar().clickTileViewButton();
 
         getAllParticipants().forEach(participant ->
             MeetUIUtils.waitForTileViewDisplay(participant, true));
-
-        getParticipant1().getToolbar().clickTileViewButton();
-
-        getAllParticipants().forEach(participant ->
-            MeetUIUtils.waitForTileViewDisplay(participant, false));
     }
 
     /**

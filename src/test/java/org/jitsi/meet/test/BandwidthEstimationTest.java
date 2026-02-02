@@ -24,7 +24,6 @@ import org.testng.*;
 import org.testng.annotations.*;
 
 import java.io.*;
-import java.text.*;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -269,7 +268,7 @@ public class BandwidthEstimationTest
     /**
      * The options to launch the sender participant with.
      */
-    private ParticipantOptions senderOptions;
+    private WebParticipantOptions senderOptions;
 
     /**
      * Utility method that calls {@link #tcScript} to rate-limit given port.
@@ -304,8 +303,8 @@ public class BandwidthEstimationTest
      * Runs the benchmark script with the jvb and the p2p webrtc-stats
      * as a parameter.
      *
-     * @param jvb the {@link File} to read the JVB webrtc-stats from.
-     * @param p2p the {@link File} to read the webrtc-stats file from.
+     * @param jvbFile the {@link File} to read the JVB webrtc-stats from.
+     * @param p2pFile the {@link File} to read the webrtc-stats file from.
      * @param analysisFile the {@link File} to store the analysis results in.
      */
     private static int benchmark(File jvbFile, File p2pFile, File analysisFile)
@@ -344,13 +343,13 @@ public class BandwidthEstimationTest
      */
     private static String humanizeSchedule(String[] schedule)
     {
-	StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
         for (String s : schedule)
         {
             sb.append(s.replaceAll(",", ""));
             sb.append("s"); // append an to indicate the duration unit.
         }
-	return sb.toString();
+        return sb.toString();
     }
 
     /**
@@ -401,6 +400,7 @@ public class BandwidthEstimationTest
                     "WARN no tc script has been specified and "
                         + "the BandwidthEstimationTest will not be "
                         + "executed!");
+                cleanupClass();
                 throw new SkipException("no tc script has been specified");
             }
         }
@@ -418,6 +418,7 @@ public class BandwidthEstimationTest
                     "WARN no benchmark script has been specified and "
                         + "the BandwidthEstimationTest will not be "
                         + "executed!");
+                cleanupClass();
                 throw new SkipException("no tc script has been specified");
             }
         }
@@ -435,6 +436,7 @@ public class BandwidthEstimationTest
                     "WARN no chrome wrapper has been specified and "
                         + "the BandwidthEstimationTest will not be "
                         + "executed!");
+                cleanupClass();
                 throw new SkipException("no tc script has been specified");
             }
         }

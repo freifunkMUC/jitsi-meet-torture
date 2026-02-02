@@ -22,6 +22,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import static org.jitsi.meet.test.base.ParticipantOptions.GLOBAL_PROP_PREFIX;
+import static org.jitsi.meet.test.base.AbstractBaseTest.TOKEN_PNAME;
 
 /**
  * Helper class for managing {@link Participant}s.
@@ -97,11 +98,11 @@ public abstract class ParticipantHelper<P extends Participant>
      */
     public P createParticipant(String configPrefix)
     {
-        return this.createParticipant(configPrefix, null);
+        return this.createParticipant(-1, configPrefix, null);
     }
 
     /**
-     * Joins a participant, created if does not exists.
+     * Joins a participant, created if it does not exist.
      *
      * @param configPrefix the config prefix which is used to identify
      * the config properties which describe the new participant.
@@ -109,6 +110,20 @@ public abstract class ParticipantHelper<P extends Participant>
      * @return the participant which was created
      */
     public P createParticipant(String configPrefix, ParticipantOptions options)
+    {
+        return this.createParticipant(-1, configPrefix, options);
+    }
+
+    /**
+     * Joins a participant, created if it does not exist.
+     *
+     * @param ix The index of the participant or -1 for the next available.
+     * @param configPrefix the config prefix which is used to identify
+     * the config properties which describe the new participant.
+     * @param options custom options to be used for the participant.
+     * @return the participant which was created
+     */
+    public P createParticipant(int ix, String configPrefix, ParticipantOptions options)
     {
         assertInitialized();
 
@@ -128,7 +143,7 @@ public abstract class ParticipantHelper<P extends Participant>
         }
 
         // If at this point there's no participant type we'll go with Chrome,
-        // because the web tests were first and we don't want to require changes
+        // because the web tests were first, and we don't want to require changes
         // to the old web run configs.
         if (targetOptions.getParticipantType() == null)
         {
@@ -138,7 +153,7 @@ public abstract class ParticipantHelper<P extends Participant>
             targetOptions.setParticipantType(ParticipantType.chrome);
         }
 
-        // Provide some default name if wasn't specified neither in
+        // Provide some default name if wasn't specified, neither in
         // the arguments nor in the config.
         if (StringUtils.isBlank(targetOptions.getName()))
         {
@@ -147,11 +162,16 @@ public abstract class ParticipantHelper<P extends Participant>
 
         P participant = participantFactory.createParticipant(targetOptions);
 
-        participants.add(participant);
+        if (ix > -1 && ix < participants.size())
+        {
+            participants.set(ix, participant);
+        }
+        else
+        {
+            participants.add(participant);
+        }
 
-        TestUtils.print(
-                "Started " + participant.getType()
-                    + " driver for prefix: " + configPrefix);
+        TestUtils.print("Started " + participant.getType() + " driver for prefix: " + configPrefix);
 
         return participant;
     }
@@ -171,8 +191,13 @@ public abstract class ParticipantHelper<P extends Participant>
      */
     public void cleanup()
     {
-        participants.stream().forEach(Participant::closeSafely);
-        participants.clear();
+        if (participants != null)
+        {
+            participants.stream()
+                .filter(participant -> participant != null)
+                .forEach(Participant::closeSafely);
+            participants.clear();
+        }
     }
 
     /**
@@ -203,7 +228,11 @@ public abstract class ParticipantHelper<P extends Participant>
     public void closeParticipant(P participant)
     {
         participant.closeSafely();
-        participants.remove(participant);
+
+        // remove the index, so we do not mess up the number of participants
+        // and their order/indexes in the list
+        int ix = participants.indexOf(participant);
+        participants.set(ix, null);
     }
 
     /**
@@ -235,6 +264,13 @@ public abstract class ParticipantHelper<P extends Participant>
         }
 
         url.setServerUrl(serverUrl);
+
+        String token = System.getProperty(TOKEN_PNAME);
+        if (StringUtils.isNotBlank(token))
+        {
+            url.addFragmentParam("jwt", token);
+        }
+
         return url;
     }
 

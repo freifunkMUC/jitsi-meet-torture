@@ -20,6 +20,7 @@ import org.openqa.selenium.support.ui.*;
 
 import java.io.*;
 import java.nio.file.*;
+import java.time.*;
 import java.util.*;
 
 import static org.testng.Assert.fail;
@@ -74,11 +75,21 @@ public class TestUtils
     public static void click(WebDriver driver, final By by)
     {
         waitForElementBy(driver, by, 10);
-        WebDriverWait wait = new WebDriverWait(driver, 10);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         WebElement element = wait.until(
             ExpectedConditions.elementToBeClickable(by));
 
-        element.click();
+        try
+        {
+            element.click();
+        }
+        catch (StaleElementReferenceException e)
+        {
+            // when we want to click on notification and a new one comes
+            // we can hit StaleElementReferenceException because of re-render
+            // a workaround is to try again
+            driver.findElement(by).click();
+        }
     }
 
     /**
@@ -122,7 +133,7 @@ public class TestUtils
         final String scriptToExecute,
         long timeout)
     {
-        (new WebDriverWait(driver, timeout))
+        (new WebDriverWait(driver, Duration.ofSeconds(timeout)))
             .until((ExpectedCondition<Boolean>) d -> {
                 Object res = ((JavascriptExecutor) driver)
                     .executeScript(scriptToExecute);
@@ -144,7 +155,7 @@ public class TestUtils
         final String expectedResult,
         long timeout)
     {
-        (new WebDriverWait(driver, timeout))
+        (new WebDriverWait(driver, Duration.ofSeconds(timeout)))
             .until((ExpectedCondition<Boolean>) d -> {
                 Object res =
                     ((JavascriptExecutor) driver)
@@ -183,7 +194,7 @@ public class TestUtils
         String errorMessage)
     {
         FluentWait<WebDriver> waitImpl
-            = new WebDriverWait(driver, timeout);
+            = new WebDriverWait(driver, Duration.ofSeconds(timeout));
 
         if (errorMessage != null)
         {
@@ -210,7 +221,7 @@ public class TestUtils
         long timeout)
     {
         final WebElement[] foundElement = new WebElement[1];
-        new WebDriverWait(driver, timeout)
+        new WebDriverWait(driver, Duration.ofSeconds(timeout))
             .until((ExpectedCondition<Boolean>) d -> {
                 List<WebElement> elements = d.findElements(by);
 
@@ -227,17 +238,64 @@ public class TestUtils
     }
 
     /**
-     * Waits until an element becomes unavailable
+     * Waits until an element becomes available/displayed and return it.
      * @param driver the {@code WebDriver}.
      * @param by the xpath to search for the element
      * @param timeout the time to wait for the element in seconds.
      * @return WebElement the found element
      */
+    public static String waitForElementTextBy(
+        WebDriver driver,
+        final By by,
+        long timeout)
+    {
+        final String[] foundElement = new String[2];
+        try
+        {
+            new WebDriverWait(driver, Duration.ofSeconds(timeout))
+                .until((ExpectedCondition<Boolean>) d -> {
+                    List<WebElement> elements = d.findElements(by);
+
+                    if (!elements.isEmpty())
+                    {
+                        if (!elements.get(0).isDisplayed())
+                        {
+                            return false;
+                        }
+                        foundElement[1] = Boolean.TRUE.toString();
+                        foundElement[0] = elements.get(0).getText();
+                        return true;
+                    }
+                    else
+                        return false;
+                });
+        }
+        catch (StaleElementReferenceException e)
+        {
+            // sometimes while getting the text we get:
+            // StaleElementReferenceException: stale element reference: element is not attached to the page document
+            // Then we will try one more time, hoping for no re-render.
+            if (foundElement[1] != null)
+            {
+                return driver.findElement(by).getText();
+            }
+        }
+
+        return foundElement[0];
+    }
+
+    /**
+     * Waits until an element becomes unavailable
+     * @param driver the {@code WebDriver}.
+     * @param by the xpath to search for the element
+     * @param timeout the time to wait for the element in seconds.
+     */
     public static void waitForElementNotPresentBy(
         WebDriver driver,
         final By by,
-        long timeout) {
-        new WebDriverWait(driver, timeout)
+        long timeout)
+    {
+        new WebDriverWait(driver, Duration.ofSeconds(timeout))
             .until((ExpectedCondition<Boolean>) d -> d.findElements(by)
                 .isEmpty());
     }
@@ -325,7 +383,7 @@ public class TestUtils
             final Object attributeValue,
             long timeout)
     {
-        new WebDriverWait(driver, timeout)
+        new WebDriverWait(driver, Duration.ofSeconds(timeout))
                 .until((ExpectedCondition<Boolean>) d -> {
                     WebElement el = d.findElement(By.xpath(xpath));
 
@@ -350,7 +408,7 @@ public class TestUtils
             long timeout
     )
     {
-        new WebDriverWait(driver, timeout)
+        new WebDriverWait(driver, Duration.ofSeconds(timeout))
             .until((ExpectedCondition<Boolean>) d -> {
                 WebElement el = d.findElement(By.xpath(xpath));
                 String classNames = el.getAttribute("class");
@@ -372,7 +430,7 @@ public class TestUtils
             final String className,
             long timeout)
     {
-        new WebDriverWait(driver, timeout)
+        new WebDriverWait(driver, Duration.ofSeconds(timeout))
                 .until((ExpectedCondition<Boolean>) d -> {
                     WebElement el = d.findElement(By.xpath(xpath));
                     String classNames = el.getAttribute("class");
@@ -395,7 +453,7 @@ public class TestUtils
     }
 
     /**
-     * Waits until an element becomes available and displayed.
+     * Waits until an element becomes is not displayed.
      * @param driver the {@code WebDriver}.
      * @param id the id to search for the element
      * @param timeout the time to wait for the element in seconds.
@@ -439,7 +497,7 @@ public class TestUtils
         long timeout,
         final boolean isDisplayed)
     {
-        new WebDriverWait(driver, timeout)
+        new WebDriverWait(driver, Duration.ofSeconds(timeout))
             .withMessage(
                 "Is " + (isDisplayed ? "" : "not")
                     + "displayed: " + by.toString())
@@ -469,6 +527,29 @@ public class TestUtils
      * Waits until the given condition is fulfilled and fails the currently
      * running test if this doesn't happen within {@code timeoutSeconds} seconds.
      * @param driver the {@code WebDriver}.
+     * @param message the message to print in case of a failure.
+     * @param timeoutSeconds the time to wait for the element in seconds.
+     * @param condition the condition to be met.
+     */
+    public static void waitForCondition(WebDriver driver,
+                                        String message,
+                                        int timeoutSeconds,
+                                        ExpectedCondition<?> condition)
+    {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+
+        if (message != null)
+        {
+            wait.withMessage(message);
+        }
+
+        wait.until(condition);
+    }
+
+    /**
+     * Waits until the given condition is fulfilled and fails the currently
+     * running test if this doesn't happen within {@code timeoutSeconds} seconds.
+     * @param driver the {@code WebDriver}.
      * @param timeoutSeconds the time to wait for the element in seconds.
      * @param condition the condition to be met.
      */
@@ -476,7 +557,7 @@ public class TestUtils
                                         int timeoutSeconds,
                                         ExpectedCondition<?> condition)
     {
-        (new WebDriverWait(driver, timeoutSeconds)).until(condition);
+        waitForCondition(driver, null, timeoutSeconds, condition);
     }
 
     /**
@@ -494,7 +575,7 @@ public class TestUtils
                                         ExpectedCondition<?> condition,
                                         long pollWaitTime)
     {
-        (new WebDriverWait(driver, timeoutSeconds, pollWaitTime))
+        (new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds), Duration.ofSeconds(pollWaitTime)))
             .until(condition);
     }
 

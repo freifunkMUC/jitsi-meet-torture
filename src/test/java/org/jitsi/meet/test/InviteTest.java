@@ -21,6 +21,7 @@ import org.jitsi.meet.test.util.*;
 import org.jitsi.meet.test.pageobjects.web.*;
 import org.jitsi.meet.test.web.*;
 import org.openqa.selenium.*;
+import org.openqa.selenium.support.ui.*;
 import org.testng.*;
 import org.testng.annotations.*;
 
@@ -57,17 +58,25 @@ public class InviteTest extends WebTestBase
         InviteDialog inviteDialog = participant.getInviteDialog();
         inviteDialog.open();
 
+        TestUtils.waitForCondition(participant.getDriver(), 2,
+            (ExpectedCondition<Boolean>) d -> inviteDialog.isOpen());
+
         String currentUrl = participant.getDriver().getCurrentUrl();
         String displayedUrl = inviteDialog.getMeetingURL();
 
         assertTrue(currentUrl.contains(displayedUrl));
+
+        inviteDialog.close();
+        TestUtils.waitForCondition(participant.getDriver(), 2,
+            (ExpectedCondition<Boolean>) d -> !inviteDialog.isOpen());
     }
 
     /**
      * Checks if the info dialog shows a dial in number and pin (conference ID).
      */
     @Test(dependsOnMethods = { "testInviteURLDisplays" })
-    public void testDialInDisplays() {
+    public void testDialInDisplays()
+    {
         if (!MeetUtils.isDialInEnabled(participant.getDriver()))
         {
             throw new SkipException(
@@ -75,6 +84,9 @@ public class InviteTest extends WebTestBase
         }
         InviteDialog inviteDialog = participant.getInviteDialog();
         inviteDialog.open();
+
+        TestUtils.waitForCondition(participant.getDriver(), 2,
+            (ExpectedCondition<Boolean>) d -> inviteDialog.isOpen());
 
         String displayedNumber = inviteDialog.getDialInNumber();
         assertTrue(displayedNumber.length() > 0);
@@ -93,6 +105,9 @@ public class InviteTest extends WebTestBase
         InviteDialog inviteDialog = participant.getInviteDialog();
         inviteDialog.open();
 
+        TestUtils.waitForCondition(participant.getDriver(), 2,
+            (ExpectedCondition<Boolean>) d -> inviteDialog.isOpen());
+
         String displayedNumber = inviteDialog.getDialInNumber();
         String displayedPin = inviteDialog.getPinNumber();
 
@@ -106,8 +121,7 @@ public class InviteTest extends WebTestBase
         ArrayList<String> tabs = new ArrayList<>(driver.getWindowHandles());
         driver.switchTo().window(tabs.get(1));
 
-        DialInNumbersPage dialInNumbersPage
-            = participant.getDialInNumbersPage();
+        DialInNumbersPage dialInNumbersPage = participant.getDialInNumbersPage();
         dialInNumbersPage.waitForLoad();
 
         String conferenceIDMessage = dialInNumbersPage.getConferenceIdMessage();

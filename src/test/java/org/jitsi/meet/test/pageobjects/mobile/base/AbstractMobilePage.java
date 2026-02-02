@@ -47,7 +47,7 @@ public class AbstractMobilePage
 
     /**
      * Initializes any member fields annotated with <tt>@AndroidFindBy</tt> or
-     * <tt>@iOSFindBy</tt>.
+     * <tt>@iOSXCUITFindBy</tt>.
      */
     private void initFields()
     {
@@ -64,7 +64,7 @@ public class AbstractMobilePage
      */
     private void initTestHintFields()
     {
-        for(Class classIn = getClass();
+        for (Class classIn = getClass();
             classIn != Object.class;
             classIn = classIn.getSuperclass())
         {
@@ -74,7 +74,7 @@ public class AbstractMobilePage
 
     private void initTestHintFields(Class classIn)
     {
-        for(Field field : classIn.getDeclaredFields())
+        for (Field field : classIn.getDeclaredFields())
         {
             TestHintLocator[] locators
                 = field.getAnnotationsByType(TestHintLocator.class);

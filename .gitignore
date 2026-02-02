@@ -19,7 +19,13 @@ classes
 target
 *.log
 target/
+doc/grid/resources/
 
 # PSNR test sequences and output files
 resources/psnr/output/
 resources/psnr/test_sequences/
+
+# VSCode files
+.classpath
+.project
+.settings

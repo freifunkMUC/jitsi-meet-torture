@@ -24,9 +24,11 @@ import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.*;
 
 import java.io.*;
+import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.*;
+import java.util.logging.*;
 
 /**
  * The participant instance holding the {@link WebDriver}.
@@ -38,7 +40,7 @@ public abstract class Participant<T extends WebDriver>
      * The seconds between calls that will make sure we keep alive the
      * webdriver session.
      */
-    private static final int KEEP_ALIVE_SESSION_INTERVAL = 20;
+    private static final int KEEP_ALIVE_SESSION_INTERVAL = 10;
 
     /**
      * The default config which will be set on the {@link JitsiMeetUrl}, before
@@ -71,6 +73,11 @@ public abstract class Participant<T extends WebDriver>
      * to be able to detect that there is no need to load anything.
      */
     private String joinedRoomName = null;
+
+    /**
+     * The url used to join.
+     */
+    private JitsiMeetUrl meetUrl = null;
 
     /**
      * Executor that is responsible for keeping the participant session alive.
@@ -115,15 +122,6 @@ public abstract class Participant<T extends WebDriver>
 
     /**
      * Joins a conference.
-     * @param roomName the room name to join.
-     */
-    public void joinConference(String roomName)
-    {
-        this.joinConference(new JitsiMeetUrl().setRoomName(roomName));
-    }
-
-    /**
-     * Joins a conference.
      *
      * @param meetURL a {@link JitsiMeetUrl} which represents the full
      * conference URL which includes server, conference parameters and
@@ -152,6 +150,7 @@ public abstract class Participant<T extends WebDriver>
         doJoinConference(meetURL);
 
         this.joinedRoomName = meetURL.getRoomName();
+        this.meetUrl = meetURL;
         this.hungUp = false;
     }
 
@@ -218,8 +217,7 @@ public abstract class Participant<T extends WebDriver>
         }
         catch (Throwable t)
         {
-            // FIXME: use Logger ?
-            t.printStackTrace();
+            Logger.getGlobal().log(Level.SEVERE, "Failed to cleanly close participant:" + getName(), t);
         }
     }
 
@@ -296,11 +294,31 @@ public abstract class Participant<T extends WebDriver>
     }
 
     /**
-     * Waits 15 seconds until this participant joins the MUC.
+     * Waits 5 seconds for this participant to become a moderator.
+     */
+    public void waitToBecomeModerator()
+    {
+        waitToBecomeModerator(5);
+    }
+
+    /**
+     * Waits until this participant becomes a moderator.
+     * @param timeout the maximum time to wait in seconds.
+     */
+    public void waitToBecomeModerator(int timeout)
+    {
+        waitForCondition(
+                this::isModerator,
+                timeout,
+                toString() + "#waitToBecomeModerator");
+    }
+
+    /**
+     * Waits 10 seconds until this participant joins the MUC.
      */
     public void waitToJoinMUC()
     {
-        waitToJoinMUC(15);
+        waitToJoinMUC(10);
     }
 
     /**
@@ -322,6 +340,23 @@ public abstract class Participant<T extends WebDriver>
      * room; otherwise, {@code false}
      */
     public abstract boolean isInMuc();
+
+    /**
+     * Checks whether this participant is a moderator.
+     *
+     * @return {@code true} if the this participant is a moderator; otherwise,
+     * {@code false}
+     */
+    public abstract boolean isModerator();
+
+    /**
+     * Checks whether this participant has the grant moderator functionality
+     * available.
+     *
+     * @return {@code true} if the this participant has grant moderator
+     * functionality otherwise, {@code false}
+     */
+    public abstract boolean hasGrantModerator();
 
     /**
      * Waits 15 sec for the given participant to enter the ICE 'connected'
@@ -454,23 +489,40 @@ public abstract class Participant<T extends WebDriver>
      */
     public void saveHtmlSource(File outputDir, String fileName)
     {
-        try(FileOutputStream fOut
-                = FileUtils.openOutputStream(
-                        new File(outputDir, fileName)))
+        try
         {
-            fOut.write(
-                    driver.getPageSource().replace(">",">\n").getBytes());
+            if (getMeetUrl() != null && getMeetUrl().getIframeToNavigateTo() != null)
+            {
+                // let's wait for switch to that iframe, so we can save the correct page
+                WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(60));
+                wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(
+                    By.id(getMeetUrl().getIframeToNavigateTo())));
+            }
+
+            FileUtils.openOutputStream(new File(outputDir, fileName))
+                .write(driver.getPageSource().replace(">", ">\n").getBytes());
         }
         catch(Exception e)
         {
-            e.printStackTrace();
+            Logger.getGlobal().log(Level.SEVERE, "Failed to saveHtmlSource to:" + fileName, e);
+
+            try
+            {
+                // will try the main page
+                FileUtils.openOutputStream(new File(outputDir, fileName))
+                    .write(driver.getPageSource().replace(">", ">\n").getBytes());
+            }
+            catch(Exception ex)
+            {
+                e.printStackTrace();
+            }
         }
     }
 
     /**
      * Obtains JitsiMeet debug logs.
      *
-     * XXX On web the value is obtained from "APP.conference.getLogs()", but
+     * XXX On web the value is obtained from "APP.connection.getLogs()", but
      * it's done by executing a script, so no idea at this point when that will
      * be available on mobile.
      *
@@ -561,5 +613,14 @@ public abstract class Participant<T extends WebDriver>
             .filter(p -> p.getEndpointId().equals(id))
             .findFirst()
             .orElse(null);
+    }
+
+    /**
+     * The url with all options used to join the conference.
+     * @return
+     */
+    public JitsiMeetUrl getMeetUrl()
+    {
+        return meetUrl;
     }
 }

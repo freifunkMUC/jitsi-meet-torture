@@ -39,13 +39,21 @@ public class WebParticipantOptions
     private static final String DEFAULT_REMOTE_ADDRESS_NAME
         = "http://localhost:4444/wd/hub";
 
-    private static final String PROP_BINARY = "binary";
+    /**
+     * Whether to allow insecure certs, by default is false.
+     */
+    private static final String PROP_ALLOW_INSECURE_CERTS = "allowInsecureCerts";
 
     /**
-     * The id of the chrome extension that will be loaded
-     * on opening participant driver.
+     * This parameter gets a string 'MAP somedomain.com ip-address'.
+     * These are custom host resolver rules passed to chrome to be able to use an ip address of a particular shard
+     * but still using the domain name.
      */
-    private static final String PROP_CHROME_EXTENSION_ID = "chromeExtensionID";
+    private static final String PROP_HOST_RESOLVER_RULES = "hostResolverRules";
+
+    private static final String PROP_BINARY = "binary";
+
+    private static final String PROP_APP_NAME = "applicationName";
 
     /**
      * The name of the system property that holds the path to the packet
@@ -98,10 +106,15 @@ public class WebParticipantOptions
         = "chrome.disable.sandbox";
 
     /**
-     * The property to enable headless parameter for chrome.
+     * The property to enable headless parameter.
      */
-    private static final String PROP_ENABLE_HEADLESS
-        = "chrome.enable.headless";
+    private static final String PROP_ENABLE_HEADLESS = "enable.headless";
+
+    /**
+     * The property to enable headless parameter for.
+     * To be removed.
+     */
+    private static final String PROP_ENABLE_HEADLESS_LEGACY = "chrome.enable.headless";
 
     /**
      * The name of the system property that holds the path to the packet
@@ -113,6 +126,27 @@ public class WebParticipantOptions
     private static final String PROP_VERSION = "version";
 
     /**
+     * By default WebTestBase will set a display name, this property can skip this step.
+     */
+    private static final String PROP_SKIP_DISPLAYNAME = "skip-displayname";
+
+    /**
+     * Whether the Participant is using a the load test URL (and thus certain operations
+     * can be skipped).
+     */
+    private static final String PROP_LOADTEST = "isLoadTest";
+
+    /**
+     * Whether to save the Participant logs on hangup.
+     */
+    private static final String PROP_SAVE_LOGS = "saveLogs";
+
+    /**
+     * Whether to create this participant as one of multiple tabs in a single browser.
+     */
+    private static final String PROP_MULTITAB = "multiTab";
+
+    /**
      * Get web specific global property names. See
      * {@link ParticipantFactory#moveSystemGlobalProperties()} for more info.
      *
@@ -121,8 +155,11 @@ public class WebParticipantOptions
     {
         List<String> globalKeys = new LinkedList<>();
 
+        globalKeys.add(PROP_ALLOW_INSECURE_CERTS);
         globalKeys.add(PROP_DISABLE_NOSANBOX);
         globalKeys.add(PROP_ENABLE_HEADLESS);
+        globalKeys.add(PROP_ENABLE_HEADLESS_LEGACY);
+        globalKeys.add(PROP_HOST_RESOLVER_RULES);
         globalKeys.add(PROP_REMOTE_ADDRESS_NAME);
         globalKeys.add(PROP_REMOTE_RESOURCE_PARENT_PATH_NAME);
 
@@ -143,6 +180,11 @@ public class WebParticipantOptions
                 PROP_REMOTE_ADDRESS_NAME, DEFAULT_REMOTE_ADDRESS_NAME);
         defaults.setProperty(
                 PROP_CHROME_DISABLE_SANDBOX, DEFAULT_CHROME_DISABLE_SANDBOX);
+        defaults.setProperty(PROP_SKIP_DISPLAYNAME, Boolean.FALSE.toString());
+        defaults.setProperty(PROP_ALLOW_INSECURE_CERTS, Boolean.FALSE.toString());
+        defaults.setProperty(PROP_LOADTEST, Boolean.FALSE.toString());
+        defaults.setProperty(PROP_SAVE_LOGS, Boolean.FALSE.toString());
+        defaults.setProperty(PROP_MULTITAB, Boolean.FALSE.toString());
 
         return defaults;
     }
@@ -178,6 +220,26 @@ public class WebParticipantOptions
     }
 
     /**
+     * The getter for {@link #PROP_ALLOW_INSECURE_CERTS}.
+     *
+     * @return <tt>true</tt> or <tt>false</tt>.
+     */
+    public boolean allowsInsecureCerts()
+    {
+        return getBooleanProperty(PROP_ALLOW_INSECURE_CERTS);
+    }
+
+    /**
+     * The getter for {@link #PROP_HOST_RESOLVER_RULES}.
+     *
+     * @return the rules as string.
+     */
+    public String hostResolverRules()
+    {
+        return getProperty(PROP_HOST_RESOLVER_RULES);
+    }
+
+    /**
      * The getter for {@link #PROP_CHROME_DISABLE_SANDBOX}.
      *
      * @return <tt>true</tt> or <tt>false</tt>.
@@ -202,7 +264,19 @@ public class WebParticipantOptions
      */
     public boolean isHeadless()
     {
-        return getBooleanProperty(PROP_ENABLE_HEADLESS);
+        return getBooleanProperty(PROP_ENABLE_HEADLESS) || getBooleanProperty(PROP_ENABLE_HEADLESS_LEGACY);
+    }
+
+    /**
+     * Sets whether to use headless mode.
+     * @param value new value.
+     * @return a reference to this object.
+     */
+    public WebParticipantOptions setHeadless(boolean value)
+    {
+        setProperty(PROP_ENABLE_HEADLESS, String.valueOf(value));
+
+        return this;
     }
 
     /**
@@ -254,6 +328,42 @@ public class WebParticipantOptions
     }
 
     /**
+     * Sets whether we need to skip setting display name for this participant by default in web base tests.
+     */
+    public WebParticipantOptions setSkipDisplayNameSet(boolean value)
+    {
+        setProperty(PROP_SKIP_DISPLAYNAME, Boolean.toString(value));
+        return this;
+    }
+
+    /**
+     * Sets whether this participant is using the load test interface.
+     */
+    public WebParticipantOptions setLoadTest(boolean value)
+    {
+        setProperty(PROP_LOADTEST, Boolean.toString(value));
+        return this;
+    }
+
+    /**
+     * Sets whether to save logs for this participant on hangup.
+     */
+    public WebParticipantOptions setSaveLogs(boolean value)
+    {
+        setProperty(PROP_SAVE_LOGS, Boolean.toString(value));
+        return this;
+    }
+
+    /**
+     * Sets whether this participant is using multi-tab.  See also {@link ParticipantOptions#setBaseDriver}.
+     */
+    public WebParticipantOptions setMultitab(boolean value)
+    {
+        setProperty(PROP_MULTITAB, Boolean.toString(value));
+        return this;
+    }
+
+    /**
      * Sets the name of y4m video file which will be streamed through fake video
      * device by participants. The file location is relative to working folder.
      * For remote drivers a parent folder can be set and the file will be
@@ -272,14 +382,13 @@ public class WebParticipantOptions
     }
 
     /**
-     * Sets the chrome extension id to be used.
-     * @param extensionId the chrome extension id to be used.
-     * @return a reference to this object.
+     * Sets the app name capability that the node must have.
+     *
+     * @param applicationName the app name capability that the node must have.
      */
-    public WebParticipantOptions setChromeExtensionId(String extensionId)
+    public WebParticipantOptions setApplicationName(String applicationName)
     {
-        setProperty(PROP_CHROME_EXTENSION_ID, extensionId);
-
+        setProperty(PROP_APP_NAME, applicationName);
         return this;
     }
 
@@ -330,6 +439,42 @@ public class WebParticipantOptions
     }
 
     /**
+     * Whether to skip default display name set.
+     * @return Whether to skip default display name set
+     */
+    public boolean getSkipDisplayNameSet()
+    {
+        return Boolean.valueOf(getProperty(PROP_SKIP_DISPLAYNAME));
+    }
+
+    /**
+     * Whether this is a load test URL
+     * @return Whether this is a load test URL.
+     */
+    public boolean getLoadTest()
+    {
+        return Boolean.parseBoolean(getProperty(PROP_LOADTEST));
+    }
+
+    /**
+     * Whether saving logs is enabled.
+     * @return Whether saving logs is enabled.
+     */
+    public boolean getSaveLogs()
+    {
+        return Boolean.parseBoolean(getProperty(PROP_SAVE_LOGS));
+    }
+
+    /**
+     * Whether this is using multitab
+     * @return Whether this is using multitab
+     */
+    public boolean getMultitab()
+    {
+        return Boolean.parseBoolean(getProperty(PROP_MULTITAB));
+    }
+
+    /**
      * Gets the path to the packet delivery trace file to use for the uplink
      * direction in the mahimahi shell.
      */
@@ -367,11 +512,10 @@ public class WebParticipantOptions
     }
 
     /**
-     * Returns the chrome extension id option.
-     * @return the chrome extension id option.
+     * @return the app name capability that the node must have.
      */
-    public String getChromeExtensionId()
+    public String getApplicationName()
     {
-        return getProperty(PROP_CHROME_EXTENSION_ID);
+        return getProperty(PROP_APP_NAME);
     }
 }
